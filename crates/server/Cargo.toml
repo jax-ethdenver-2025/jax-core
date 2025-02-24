@@ -1,0 +1,61 @@
+[package]
+name = "jax-server"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+jax-common = { path = "../common/" }
+
+anyhow = "1.0.80"
+axum = { version = "0.8", features = ["macros"] }
+console_error_panic_hook = "0.1"
+dotenvy = "^0.15"
+bytes = "1.0"
+futures = "^0.3"
+pico-args = "0.5.0"
+tokio = { version = "^1", features = [
+  "rt-multi-thread",
+  "macros",
+  "net",
+  "signal",
+  "sync",
+  "time",
+] }
+tower = { version = "^0.5", features = [
+  "load-shed",
+  "limit",
+  "timeout",
+  "util",
+] }
+tower-http = { version = "^0.6", features = [
+  "fs",
+  "cors",
+  "sensitive-headers",
+  "trace",
+  "limit",
+  "util",
+] }
+thiserror = "^2"
+http = "1"
+
+tracing = { version = "0.1" }
+tracing-appender = { version = "^0.2" }
+tracing-futures = { version = "^0.2", default-features = false, features = [
+  "std-future",
+] }
+tracing-subscriber = { version = "^0.3", default-features = false, features = [
+  "env-filter",
+  "fmt",
+  "local-time",
+  "time",
+  "tracing",
+] }
+url = "2.5.0"
+serde = "1.0.197"
+time = { version = "0.3.36", features = ["serde"] }
+serde_json = "1.0.115"
+axum-extra = { version = "^0.10", features = ["typed-header"] }
+tokio-util = { version = "0.7", features = ["io"] }
