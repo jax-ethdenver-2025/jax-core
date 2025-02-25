@@ -4,9 +4,11 @@ use http::Method;
 use tower_http::cors::{Any, CorsLayer};
 
 mod hello;
+mod list_blobs;
 mod share;
 
 pub use hello::handler as hello_handler;
+pub use list_blobs::handler as list_blobs_handler;
 pub use share::handler as share_handler;
 
 use crate::server::state::ServerState;
@@ -21,6 +23,7 @@ pub fn router(state: ServerState) -> Router<ServerState> {
     Router::new()
         .route("/hello", routing::get(hello_handler))
         .route("/share", routing::post(share_handler))
+        .route("/blobs", routing::get(list_blobs_handler))
         .with_state(state)
         .layer(cors_layer)
 }

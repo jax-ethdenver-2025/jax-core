@@ -1,7 +1,9 @@
 mod health;
+mod list_blobs;
 mod share;
 
 pub use health::{Liveness, Readiness};
+pub use list_blobs::{BlobInfo, ListBlobs};
 pub use share::Share;
 
 use reqwest::{Client, RequestBuilder, Url};
