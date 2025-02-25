@@ -2,12 +2,6 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 
-/// This is a very simple handler that always returns with a valid response. It's intended to be
-/// used by external healthchecks to see whether the service is "alive". Failing this check for any
-/// reason generally leads to immediate termination of the service.
-///
-/// If you're looking for how to report a service issue, please refer to
-/// [`crate::health_check::readiness::handler`].
 pub async fn handler() -> Response {
     let msg = serde_json::json!({"status": "ok"});
     (StatusCode::OK, Json(msg)).into_response()

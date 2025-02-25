@@ -1,5 +1,3 @@
-use std::convert::TryFrom;
-
 use reqwest::{
     header::{HeaderMap, HeaderValue},
     Client, Url,

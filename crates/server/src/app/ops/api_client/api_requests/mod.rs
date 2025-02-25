@@ -1,12 +1,14 @@
+mod health;
+mod share;
+
+pub use health::{Liveness, Readiness};
+pub use share::Share;
+
 use reqwest::{Client, RequestBuilder, Url};
 use serde::de::DeserializeOwned;
 
-mod hello;
-
-pub use hello::Hello;
-
 /// Defintion of an API request
-pub trait ApiRequest {
+pub trait ApiRequest: Send + Sync {
     /// Has a response type
     type Response: DeserializeOwned;
 

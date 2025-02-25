@@ -1,5 +1,5 @@
 [package]
-name = "jax-server"
+name = "jax"
 version = "0.0.0"
 edition = "2021"
 
@@ -7,11 +7,11 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-jax-common = { path = "../common/" }
-
 anyhow = "1.0.80"
+async-trait = "^0.1"
 axum = { version = "0.8", features = ["macros"] }
 console_error_panic_hook = "0.1"
+clap = { version = "4.5.4", features = ["derive"] }
 dotenvy = "^0.15"
 bytes = "1.0"
 futures = "^0.3"
@@ -54,8 +54,18 @@ tracing-subscriber = { version = "^0.3", default-features = false, features = [
   "tracing",
 ] }
 url = "2.5.0"
-serde = "1.0.197"
+serde = { version = "1.0", features = ["derive"] }
 time = { version = "0.3.36", features = ["serde"] }
 serde_json = "1.0.115"
+reqwest = { version = "^0.12", default-features = false, features = [
+  "rustls-tls",
+  "json",
+] }
 axum-extra = { version = "^0.10", features = ["typed-header"] }
 tokio-util = { version = "0.7", features = ["io"] }
+
+iroh = { version = "^0.32", features = ["discovery-pkarr-dht"] }
+iroh-blobs = { version = "^0.32", features = ["rpc"] }
+iroh-base = { version = "^0.32" }
+rand = "0.6.0"
+rand_core = "^0.6"
