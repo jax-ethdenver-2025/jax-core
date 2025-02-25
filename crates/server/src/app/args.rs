@@ -5,7 +5,7 @@ use clap::Subcommand;
 use super::ops::Init as InitOp;
 use super::ops::ListBlobs as ListBlobsOp;
 use super::ops::Probe as ProbeOp;
-use super::ops::Pull as PullOp;
+// use super::ops::Pull as PullOp;
 use super::ops::Serve as ServeOp;
 use super::ops::Share as ShareOp;
 use super::ops::Status as StatusOp;
@@ -77,7 +77,7 @@ command_enum! {
     (Serve, ServeOp),
     (Status, StatusOp),
     (Share, ShareOp),
-    (Pull, PullOp),
+    // (Pull, PullOp),
     (Probe, ProbeOp),
     (ListBlobs, ListBlobsOp),
 }
@@ -89,7 +89,7 @@ impl fmt::Display for OpOutput {
             OpOutput::Serve(_) => write!(f, ""),
             OpOutput::Status(output) => write!(f, "{}", output),
             OpOutput::Share(ticket) => write!(f, "{}", ticket),
-            OpOutput::Pull(output) => write!(f, "{}", output.display()),
+            // OpOutput::Pull(output) => write!(f, "{}", output.display()),
             OpOutput::Probe(result) => write!(f, "{}", result),
             OpOutput::ListBlobs(output) => write!(f, "{}", output),
         }

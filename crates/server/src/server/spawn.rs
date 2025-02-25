@@ -63,13 +63,13 @@ async fn iroh_router(
     state: ServerState,
     mut shutdown_rx: WatchReceiver<()>,
 ) -> Result<(), IrohRouterError> {
-    // Get the endpoint from state
-    let endpoint = state.endpoint().ok_or(IrohRouterError::MissingEndpoint)?;
-    let blobs = state.blobs().ok_or(IrohRouterError::MissingBlobs)?;
+    // Get the resources needed for the router
+    let endpoint = state.endpoint().clone();
+    let blobs = state.blob_service().get_inner_blobs().clone();
 
     // Build the Iroh router
-    let router = IrohRouter::builder((*endpoint).clone())
-        .accept(iroh_blobs::ALPN, (*blobs).clone())
+    let router = IrohRouter::builder(endpoint)
+        .accept(iroh_blobs::ALPN, blobs)
         .spawn()
         .await
         .map_err(IrohRouterError::RouterSetupFailed)?;

@@ -193,23 +193,6 @@ async fn get_or_insert_size(
     Ok(size)
 }
 
-// async fn verified_size(
-//     connection: &iroh::endpoint::Connection,
-//     hash: &Hash,
-// ) -> anyhow::Result<(u64, Stats)> {
-//     let request = iroh_blobs::protocol::GetRequest::new(*hash, iroh_blobs::protocol::RangeSpec::default());
-//     let request = iroh_blobs::get::fsm::start(connection.clone(), request);
-//     let connected = request.next().await?;
-//     let at_blob_header = connected.next().await?;
-//     let size = at_blob_header.size();
-//     let at_end_blob = at_blob_header.drain().await?;
-//     let EndBlobNext::Closing(closing) = at_end_blob.next() else {
-//         unreachable!("request contains only one blob");
-//     };
-//     let stats = closing.next().await?;
-//     Ok((size, stats))
-// }
-
 pub async fn verified_size(
     connection: &iroh::endpoint::Connection,
     hash: &Hash,

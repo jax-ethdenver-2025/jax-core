@@ -47,6 +47,7 @@ pub struct OnDiskConfig {
     pub blobs_path: PathBuf,
     pub blobs_option: BlobsOptions,
     pub key_file_path: PathBuf,
+    pub tracker_path: PathBuf,
 }
 
 impl Default for OnDiskConfig {
@@ -63,6 +64,7 @@ impl Default for OnDiskConfig {
             },
             // relative to xdg config dir
             key_file_path: PathBuf::from("key.bin"),
+            tracker_path: PathBuf::from("tracker"),
         }
     }
 }
@@ -89,6 +91,11 @@ impl OnDiskConfig {
     pub fn blobs_path(&self) -> PathBuf {
         let path = Self::find_xdg_config_dir();
         path.join(self.blobs_path.clone())
+    }
+
+    pub fn tracker_path(&self) -> PathBuf {
+        let path = Self::find_xdg_config_dir();
+        path.join(self.tracker_path.clone())
     }
 
     pub fn find_xdg_config_dir() -> PathBuf {
@@ -118,12 +125,16 @@ impl OnDiskConfig {
         let key_bytes = secret_key.to_bytes();
 
         let blobs_path = on_disk_config.blobs_path();
+        let tracker_path = on_disk_config.tracker_path();
         let key_path = on_disk_config.key_file_path();
         let config_path = Self::config_path();
 
         std::fs::create_dir_all(blobs_path.clone())
             .map_err(|e| ConfigError::Io(e, blobs_path.clone()))?;
         let _store = Store::new(blobs_path, on_disk_config.blobs_option());
+
+        std::fs::create_dir_all(tracker_path.clone())
+            .map_err(|e| ConfigError::Io(e, tracker_path.clone()))?;
 
         std::fs::write(&config_path, config_json).map_err(|e| ConfigError::Io(e, config_path))?;
 
@@ -156,6 +167,7 @@ pub struct Config {
     endpoint_listen_addr: SocketAddr,
     key_file_path: PathBuf,
     blobs_path: PathBuf,
+    tracker_path: PathBuf,
 
     // Logging Level
     log_level: tracing::Level,
@@ -199,6 +211,7 @@ impl Config {
             endpoint_listen_addr,
             key_file_path: on_disk_config.key_file_path(),
             blobs_path: on_disk_config.blobs_path(),
+            tracker_path: on_disk_config.tracker_path(),
             log_level,
         })
     }
@@ -248,6 +261,10 @@ impl Config {
 
     pub fn blobs_path(&self) -> &PathBuf {
         &self.blobs_path
+    }
+
+    pub fn tracker_path(&self) -> &PathBuf {
+        &self.tracker_path
     }
 }
 

@@ -1,6 +1,7 @@
 use axum::extract::{Json, State};
 use axum::response::{IntoResponse, Response};
-use iroh_blobs::{rpc::client::blobs::WrapOption, ticket::BlobTicket, util::SetTagOption};
+use iroh_blobs::BlobFormat;
+use iroh_blobs::ticket::BlobTicket;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -21,42 +22,29 @@ pub async fn handler(
     State(state): State<ServerState>,
     Json(request): Json<ShareRequest>,
 ) -> Result<impl IntoResponse, ShareError> {
-    // Get endpoint and blobs from state
-    let endpoint = state.endpoint().ok_or(ShareError::MissingEndpoint)?;
-    let blobs = state.blobs().ok_or(ShareError::MissingBlobs)?;
-
     // Convert path string to PathBuf and get absolute path
     let path = PathBuf::from(request.path);
     let abs_path = std::path::absolute(&path).map_err(ShareError::Io)?;
 
-    // Get the blobs client
-    let blobs_client = blobs.client();
-
-    // Add file to blob store
-    let blob = blobs_client
-        .add_from_path(
-            abs_path.clone(),
-            true,
-            SetTagOption::Auto,
-            WrapOption::NoWrap,
-        )
-        .await
-        .map_err(ShareError::BlobOperation)?
-        .finish()
+    // Read file content
+    let content = tokio::fs::read(&abs_path).await.map_err(ShareError::Io)?;
+    
+    // TODO: Determine format based on file extension (could be more sophisticated)
+    let format = BlobFormat::Raw;
+    
+    // Use blob_service directly
+    let hash = state.blob_service().store_blob(content, format)
         .await
         .map_err(ShareError::BlobOperation)?;
-
-    // Create shareable ticket
-    let node_id = endpoint.node_id();
-    let ticket = BlobTicket::new(node_id.into(), blob.hash, blob.format)
+    
+    // Create ticket
+    let node_id = state.endpoint().node_id();
+    let ticket = BlobTicket::new(node_id.into(), hash, format)
         .map_err(ShareError::BlobOperation)?;
-
+    
     let response = ShareResponse {
         ticket: ticket.to_string(),
-        message: format!(
-            "File '{}' has been added to the blob store",
-            abs_path.display()
-        ),
+        message: format!("File '{}' has been added to the blob store", abs_path.display()),
     };
 
     Ok((axum::http::StatusCode::OK, Json(response)))

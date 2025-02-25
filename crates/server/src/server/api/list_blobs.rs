@@ -20,7 +20,7 @@ pub async fn handler(
     State(state): State<ServerState>,
 ) -> Result<impl IntoResponse, ListBlobsError> {
     // Get blobs from state
-    let blobs = state.blobs().ok_or(ListBlobsError::MissingBlobs)?;
+    let blobs = state.blob_service().get_inner_blobs();
 
     let blob_list = blobs
         .store()
