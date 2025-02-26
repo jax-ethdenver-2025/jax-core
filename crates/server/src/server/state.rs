@@ -1,8 +1,10 @@
+use alloy::primitives::Address;
 use iroh::discovery::pkarr::dht::DhtDiscovery;
 use iroh::Endpoint;
 use iroh::NodeId;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
+use std::str::FromStr;
 
 use crate::app::{Config, ConfigError};
 use crate::server::services::{BlobService, TrackerService};
@@ -38,8 +40,11 @@ impl ServerState {
             .await
             .map_err(ServerStateSetupError::Default)?;
             
-        let tracker_service = TrackerService::new(config.tracker_path(), endpoint_arc.as_ref().clone())
-            .await
+        let tracker_service = TrackerService::new(
+            Address::from_str("0x5FbDB2315678afecb367f032d93F642f64180aa3").unwrap(),
+            "ws://127.0.0.1:8545".to_string(),
+            endpoint_arc.as_ref().clone(),
+        ).await
             .map_err(ServerStateSetupError::Default)?;
 
         // Create state with all components

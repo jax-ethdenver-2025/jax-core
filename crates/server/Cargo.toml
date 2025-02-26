@@ -64,5 +64,13 @@ rand = "0.8"
 rand_core = "^0.6"
 bao-tree = { version = "0.13", features = ["tokio_fsm"], default-features = false }
 rand_chacha = "0.9.0"
-jax-protocol = { path = "../protocol" }
 uuid = { version = "1.3", features = ["v4"] }
+alloy = { version = "0.11", features = [
+    "eips",
+    "full",
+    "hyper",
+    "json-rpc",
+    "node-bindings",
+    "rpc-client",
+] }
+futures-util = "0.3.31"

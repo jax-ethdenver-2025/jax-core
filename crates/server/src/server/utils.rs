@@ -1,8 +1,11 @@
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::time::Duration;
 
+use iroh::discovery::pkarr::dht::DhtDiscovery;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
+use iroh::Endpoint;
 
 const REQUEST_GRACE_PERIOD: Duration = Duration::from_secs(10);
 
@@ -54,4 +57,21 @@ pub fn report_version() {
         version = ?version.version(),
         "service starting up"
     );
+}
+
+pub async fn ephemeral_endpoint() -> Endpoint {
+      // Connect to the mainline DHT as an ephemeral node
+      let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0); // Let system choose port
+      let mainline_discovery = DhtDiscovery::builder()
+          .build().expect("failed to build mainline discovery");
+      
+      // Create the endpoint with our key and discovery
+      let endpoint = Endpoint::builder()
+          .discovery(Box::new(mainline_discovery))
+          .bind_addr_v4(addr)
+          .bind()
+          .await
+          .expect("failed to bind ephemeral endpoint");
+
+    endpoint
 }

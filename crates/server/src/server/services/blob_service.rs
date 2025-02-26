@@ -1,10 +1,9 @@
 use anyhow::Result;
 use iroh::Endpoint;
 use iroh_blobs::{
-    BlobFormat, 
     Hash, 
     net_protocol::Blobs,
-    store::{fs::Store, ExportFormat, ExportMode},
+    store::fs::Store,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -27,33 +26,8 @@ impl BlobService {
         })
     }
     
-    /// Get the underlying blob store
-    pub fn store(&self) -> &Store {
-        self.blobs.store()
-    }
-    
-    /// Get a blob by hash and format
-    pub async fn get_blob(&self, hash: Hash, format: BlobFormat) -> Result<Vec<u8>> {
-        let temp_path = std::env::temp_dir().join(hash.to_string());
-        
-        self.blobs.client().export(hash, temp_path.clone(), ExportFormat::Blob, ExportMode::Copy)
-            .await?
-            .finish()
-            .await?;
-            
-        let data = tokio::fs::read(temp_path).await?;
-        Ok(data)
-    }
-    
     /// Store a blob with the given format
-    pub async fn store_blob(&self, data: Vec<u8>, format: BlobFormat) -> Result<Hash> {
-        // let temp_path = std::env::temp_dir().join(format!("temp-{}", uuid::Uuid::new_v4()));
-        
-        // Write data to temp file
-        // tokio::fs::write(&temp_path, &data).await?;
-        
-        
-        // Import the blob directly using blobs.client()
+    pub async fn store_blob(&self, data: Vec<u8>) -> Result<Hash> {
         let hash = self.blobs.client().add_bytes(data)
             .await?
             .hash;

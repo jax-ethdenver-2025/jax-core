@@ -25,15 +25,16 @@ pub async fn handler(
     // Convert path string to PathBuf and get absolute path
     let path = PathBuf::from(request.path);
     let abs_path = std::path::absolute(&path).map_err(ShareError::Io)?;
+    let tracker_service = state.tracker_service();
 
     // Read file content
     let content = tokio::fs::read(&abs_path).await.map_err(ShareError::Io)?;
     
-    // TODO: Determine format based on file extension (could be more sophisticated)
+    // Determine format based on file extension
     let format = BlobFormat::Raw;
     
-    // Use blob_service directly
-    let hash = state.blob_service().store_blob(content, format)
+    // Use blob_service directly to store the blob
+    let hash = state.blob_service().store_blob(content)
         .await
         .map_err(ShareError::BlobOperation)?;
     
@@ -41,10 +42,12 @@ pub async fn handler(
     let node_id = state.endpoint().node_id();
     let ticket = BlobTicket::new(node_id.into(), hash, format)
         .map_err(ShareError::BlobOperation)?;
+
+    tracker_service.broadcast_ticket(ticket.clone()).await?;
     
     let response = ShareResponse {
         ticket: ticket.to_string(),
-        message: format!("File '{}' has been added to the blob store", abs_path.display()),
+        message: format!("File '{}' has been added to the blob store and announced to the network", abs_path.display()),
     };
 
     Ok((axum::http::StatusCode::OK, Json(response)))
@@ -52,10 +55,8 @@ pub async fn handler(
 
 #[derive(Debug, thiserror::Error)]
 pub enum ShareError {
-    #[error("missing endpoint")]
-    MissingEndpoint,
-    #[error("missing blobs store")]
-    MissingBlobs,
+    #[error(transparent)]
+    Default(#[from] anyhow::Error),
     #[error("io error: {0}")]
     Io(std::io::Error),
     #[error("blob operation failed: {0}")]
@@ -65,14 +66,6 @@ pub enum ShareError {
 impl IntoResponse for ShareError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
-            ShareError::MissingEndpoint => (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                "Server endpoint not configured".to_string(),
-            ),
-            ShareError::MissingBlobs => (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                "Blob store not configured".to_string(),
-            ),
             ShareError::Io(e) => (
                 axum::http::StatusCode::BAD_REQUEST,
                 format!("File error: {}", e),
@@ -80,6 +73,10 @@ impl IntoResponse for ShareError {
             ShareError::BlobOperation(e) => (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Blob operation failed: {}", e),
+            ),
+            ShareError::Default(e) => (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Error: {}", e),
             ),
         };
 

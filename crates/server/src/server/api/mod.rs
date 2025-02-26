@@ -3,13 +3,13 @@ use http::header::{ACCEPT, ORIGIN};
 use http::Method;
 use tower_http::cors::{Any, CorsLayer};
 
-mod hello;
 mod list_blobs;
 mod share;
+mod probe;
 
-pub use hello::handler as hello_handler;
 pub use list_blobs::handler as list_blobs_handler;
 pub use share::handler as share_handler;
+pub use probe::handler as probe_handler;
 
 use crate::server::state::ServerState;
 
@@ -21,9 +21,9 @@ pub fn router(state: ServerState) -> Router<ServerState> {
         .allow_credentials(false);
 
     Router::new()
-        .route("/hello", routing::get(hello_handler))
         .route("/share", routing::post(share_handler))
         .route("/blobs", routing::get(list_blobs_handler))
+        .route("/probe", routing::post(probe_handler))
         .with_state(state)
         .layer(cors_layer)
 }

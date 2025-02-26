@@ -91,12 +91,6 @@ async fn iroh_router(
 
 #[derive(Debug, thiserror::Error)]
 pub enum IrohRouterError {
-    #[error("missing endpoint in server state")]
-    MissingEndpoint,
-
-    #[error("missing blobs in server state")]
-    MissingBlobs,
-
     #[error("failed to set up Iroh router: {0}")]
     RouterSetupFailed(anyhow::Error),
 
@@ -167,6 +161,19 @@ pub async fn spawn(config: &Config) {
         }
     });
     handles.push(iroh_handle);
+
+    // // Start event listener
+    // let event_state = state.clone();
+    // let mut event_rx = shutdown_rx.clone();
+    let tracker_handle = tokio::spawn(async move {
+        let tracker_service = state.tracker_service();
+        // TODO: fix this
+        if let Err(e) = tracker_service.start_listening(
+        ).await {
+            tracing::error!("Tracker service error: {}", e);
+        }
+    });
+    handles.push(tracker_handle);
 
     let _ = graceful_waiter.await;
 
