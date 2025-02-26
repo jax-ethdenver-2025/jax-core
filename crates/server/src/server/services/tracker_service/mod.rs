@@ -204,4 +204,19 @@ impl TrackerService {
         tracing::info!("Broadcasted ticket to Ethereum: {}", ticket_str);
         Ok(())
     }
+
+    /// Get all known locations for a given hash
+    pub async fn get_locations(&self, hash: Hash) -> Result<Vec<NodeId>> {
+        let map = self.content_map.read().await;
+        let mut nodes = Vec::new();
+        
+        // Look for this hash with any format
+        for (key, node_set) in map.iter() {
+            if key.hash == hash {
+                nodes.extend(node_set.iter().cloned());
+            }
+        }
+        
+        Ok(nodes)
+    }
 } 

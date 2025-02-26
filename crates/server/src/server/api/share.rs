@@ -15,6 +15,7 @@ pub struct ShareRequest {
 #[derive(Serialize)]
 pub struct ShareResponse {
     ticket: String,
+    hash: String,
     message: String,
 }
 
@@ -44,9 +45,12 @@ pub async fn handler(
         .map_err(ShareError::BlobOperation)?;
 
     tracker_service.broadcast_ticket(ticket.clone()).await?;
+
+    let hash_str = hash.to_string();
     
     let response = ShareResponse {
         ticket: ticket.to_string(),
+        hash: hash_str,
         message: format!("File '{}' has been added to the blob store and announced to the network", abs_path.display()),
     };
 

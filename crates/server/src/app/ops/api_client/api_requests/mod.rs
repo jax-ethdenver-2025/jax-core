@@ -1,10 +1,12 @@
 mod health;
 mod list_blobs;
 mod share;
+mod query;
 
 pub use health::{Liveness, Readiness};
 pub use list_blobs::{BlobInfo, ListBlobs};
 pub use share::Share;
+pub use query::Query;
 
 use reqwest::{Client, RequestBuilder, Url};
 use serde::de::DeserializeOwned;

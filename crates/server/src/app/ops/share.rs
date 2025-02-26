@@ -43,8 +43,8 @@ impl AppOp for Share {
         let response = client.call(request).await?;
 
         Ok(format!(
-            "{}\nShare ticket: {}",
-            response.message, response.ticket
+            "{}\nShare ticket: {}\nHash: {}",
+            response.message, response.ticket, response.hash
         ))
     }
 }
