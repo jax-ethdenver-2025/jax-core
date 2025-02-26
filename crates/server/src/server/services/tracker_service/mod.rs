@@ -5,6 +5,8 @@ use std::sync::Arc;
 use alloy::eips::BlockNumberOrTag;
 use alloy::{
     providers::Provider,
+    network::EthereumWallet,
+    signers::local::PrivateKeySigner,
     primitives::Address, providers::ProviderBuilder, rpc::types::Filter, sol, sol_types::SolEvent
 };
 use alloy::primitives::Log as PrimitivesLog;
@@ -14,7 +16,7 @@ use iroh::{Endpoint, NodeId};
 use iroh_blobs::get::Stats;
 use iroh_blobs::ticket::BlobTicket;
 use iroh_blobs::{BlobFormat, Hash, HashAndFormat};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Mutex};
 
 use crate::server::ephemeral_endpoint; 
 
@@ -74,12 +76,15 @@ impl From<(Hash, BlobFormat)> for ContentKey {
 }
 
 /// Simple in-memory service that tracks content announcements
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TrackerService {
     node_id: NodeId,
     address: Address,
     ws_url: String,
+    http_url: String,
+    private_key_signer: PrivateKeySigner,
     content_map: Arc<RwLock<HashMap<ContentKey, HashSet<NodeId>>>>,
+    ws_provider: Arc<Mutex<Option<Arc<dyn Provider>>>>,
 }
 
 impl TrackerService {
@@ -87,13 +92,18 @@ impl TrackerService {
     pub async fn new(
         address: Address,
         ws_url: String,
+        http_url: String,
+        private_key: String,
         endpoint: Endpoint) -> Result<Self> {
         // We're ignoring the data_dir for now - this is a pure in-memory implementation
         Ok(Self {
             node_id: endpoint.node_id(),
             address,
             ws_url,
+            http_url,
+            private_key_signer: private_key.parse::<PrivateKeySigner>().unwrap(),
             content_map: Arc::new(RwLock::new(HashMap::new())),
+            ws_provider: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -107,31 +117,38 @@ impl TrackerService {
 
     pub async fn start_listening(&self) -> Result<()> {
         let ws = alloy::providers::WsConnect::new(self.ws_url.as_str());
-        let provider = ProviderBuilder::new()
-            .on_ws(ws)
-            .await?;
+        let provider = Arc::new(
+            ProviderBuilder::new()
+                .with_chain(alloy_chains::NamedChain::AnvilHardhat)
+                .on_ws(ws)
+                .await?
+        );
         
         let filter = Filter::new()
             .address(self.address)
-            .event("TicketBroadcast(string,address)")
-            .event("TicketRemoved(string,address)")
+            // TODO: maybe add filters
             .from_block(BlockNumberOrTag::Latest);
         
         let watch = provider.subscribe_logs(&filter).await?;
-        
+        let mut stream = watch.into_stream();
+
         // Clone the fields we need before spawning
         let content_map = self.content_map.clone();
         let self_node_id = self.node_id;
+        let provider_clone = provider.clone();
         
         tokio::spawn(async move {
-            let mut stream = watch.into_stream();
-            
             while let Some(log) = stream.next().await {
                 let primitive_log = PrimitivesLog::from(log);
-                
+
                 if let Ok(event) = TicketBroadcast::decode_log(&primitive_log, true) {
-                    tracing::info!("Received message event: {}", event.ticket);
-                    let ticket = event.ticket.parse::<BlobTicket>().unwrap();
+                    let ticket = match event.ticket.parse::<BlobTicket>() {
+                        Ok(ticket) => ticket,
+                        Err(e) => {
+                            tracing::error!("tracker_service::start_listening: failed to parse ticket: {}", e);
+                            continue;
+                        }
+                    };
                     let node_id = ticket.node_addr().node_id;
                     if node_id == self_node_id {
                         continue;
@@ -142,21 +159,28 @@ impl TrackerService {
                         .or_insert_with(HashSet::new)
                         .insert(node_id);
                 }
-                else if let Ok(event) = TicketRemoved::decode_log(&primitive_log, true) {
-                    tracing::info!("Received value event: {}", event.ticket);
-                    let ticket = event.ticket.parse::<BlobTicket>().unwrap();
-                    let node_id = ticket.node_addr().node_id;
-                    if node_id == self_node_id {
-                        continue;
-                    }
-                    let key = ContentKey::from(ticket);
-                    let mut map = content_map.write().await;
-                    map.entry(key).and_modify(|nodes| {
-                        nodes.remove(&node_id);
-                    });
-                }
+                // TODO: add removed event handling
+                // else if let Ok(event) = TicketRemoved::decode_log(&primitive_log, true) {
+                //     tracing::info!("Received value event: {}", event.ticket);
+                //     let ticket = event.ticket.parse::<BlobTicket>().unwrap();
+                //     let node_id = ticket.node_addr().node_id;
+                //     if node_id == self_node_id {
+                //         continue;
+                //     }
+                //     let key = ContentKey::from(ticket);
+                //     let mut map = content_map.write().await;
+                //     map.entry(key).and_modify(|nodes| {
+                //         nodes.remove(&node_id);
+                //     });
+                // }
             }
+            // Keep the provider alive
+            let _provider = provider_clone;
         });
+
+        // Store the provider in the service to keep it alive
+        let mut guard = self.ws_provider.lock().await;
+        *guard = Some(provider);
         
         Ok(())
     }
@@ -164,7 +188,10 @@ impl TrackerService {
     /// Broadcast a ticket to the Ethereum network
     pub async fn broadcast_ticket(&self, ticket: BlobTicket ) -> Result<()> {
         let provider = ProviderBuilder::new()
-            .on_anvil_with_wallet();
+            .with_chain(alloy_chains::NamedChain::AnvilHardhat)
+            .wallet(EthereumWallet::from(self.private_key_signer.clone()))
+            .on_builtin(self.http_url.as_str())
+            .await?;
         let contract = Contract::new(self.address, provider);
         
         // Convert ticket to string representation

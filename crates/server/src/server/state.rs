@@ -10,7 +10,7 @@ use crate::app::{Config, ConfigError};
 use crate::server::services::{BlobService, TrackerService};
 use anyhow::Result;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ServerState {
     node_id: Option<NodeId>,
     endpoint: Arc<Endpoint>,
@@ -41,8 +41,12 @@ impl ServerState {
             .map_err(ServerStateSetupError::Default)?;
             
         let tracker_service = TrackerService::new(
+            // TODO: replace this with whatver the address is for the tracker contract
             Address::from_str("0x5FbDB2315678afecb367f032d93F642f64180aa3").unwrap(),
             "ws://127.0.0.1:8545".to_string(),
+            "http://127.0.0.1:8545".to_string(),
+            // NOTE: this is just an anvil key we can use for now
+            "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string(),
             endpoint_arc.as_ref().clone(),
         ).await
             .map_err(ServerStateSetupError::Default)?;

@@ -162,16 +162,21 @@ pub async fn spawn(config: &Config) {
     });
     handles.push(iroh_handle);
 
-    // // Start event listener
-    // let event_state = state.clone();
-    // let mut event_rx = shutdown_rx.clone();
+    // Start event listener
+    let event_state = state.clone();
+    let mut event_rx = shutdown_rx.clone();
     let tracker_handle = tokio::spawn(async move {
-        let tracker_service = state.tracker_service();
-        // TODO: fix this
-        if let Err(e) = tracker_service.start_listening(
-        ).await {
+        let tracker_service = event_state.tracker_service();
+        
+        // Start the tracker service
+        if let Err(e) = tracker_service.start_listening().await {
             tracing::error!("Tracker service error: {}", e);
+            return;
         }
+        
+        // Keep the task alive until shutdown signal
+        let _ = event_rx.changed().await;
+        tracing::info!("Shutting down tracker service");
     });
     handles.push(tracker_handle);
 
