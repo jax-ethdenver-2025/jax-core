@@ -1,7 +1,7 @@
 use async_trait::async_trait;
-use std::fmt;
 use iroh::NodeId;
 use iroh_blobs::Hash;
+use std::fmt;
 
 use super::api_client::{api_requests, ApiClient, ApiError};
 use crate::app::args::Op;
@@ -51,9 +51,7 @@ impl Op for Query {
         let config = Config::from_env_or_disk()?;
         let client = ApiClient::new(config.remote_url().as_ref())?;
 
-        let request = api_requests::Query {
-            hash: self.hash,
-        };
+        let request = api_requests::Query { hash: self.hash };
 
         let response = client.call(request).await?;
 
@@ -62,4 +60,4 @@ impl Op for Query {
             nodes: response.nodes,
         })
     }
-} 
+}

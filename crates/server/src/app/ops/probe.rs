@@ -1,17 +1,20 @@
 use std::sync::Arc;
 
+use bao_tree::{ChunkNum, ChunkRanges};
 use bytes::Bytes;
 use clap::Args;
 use iroh::{discovery::pkarr::dht::DhtDiscovery, Endpoint, NodeId};
 use iroh_blobs::{
-    get::{fsm::{BlobContentNext, EndBlobNext}, Stats},
+    get::{
+        fsm::{BlobContentNext, EndBlobNext},
+        Stats,
+    },
     hashseq::HashSeq,
     protocol::GetRequest,
+    protocol::RangeSpecSeq,
     ticket::BlobTicket,
     BlobFormat, Hash, HashAndFormat,
-    protocol::RangeSpecSeq,
 };
-use bao_tree::{ChunkNum, ChunkRanges};
 use rand::{Rng, SeedableRng};
 use std::fmt;
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -73,23 +76,20 @@ impl Op for Probe {
             .ticket
             .parse()
             .map_err(|_| ProbeError::InvalidTicket(self.ticket.clone()))?;
-        
+
         // Extract the node ID from the node address
         let node_id = ticket.node_addr().node_id;
         let hash = ticket.hash();
         let format = BlobFormat::Raw; // Assuming raw format for simplicity
-        
-        let content = HashAndFormat { 
-            hash, 
-            format,
-        };
+
+        let content = HashAndFormat { hash, format };
 
         // Connect to the mainline DHT as an ephemeral node
         let addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0); // Let system choose port
         let mainline_discovery = DhtDiscovery::builder()
             .build()
             .map_err(ProbeError::Default)?;
-        
+
         // Create the endpoint with our key and discovery
         let endpoint = Endpoint::builder()
             .discovery(Box::new(mainline_discovery))
@@ -128,10 +128,10 @@ async fn probe_complete(
 ) -> anyhow::Result<Stats> {
     let cap = format!("{} at {}", content, host);
     let HashAndFormat { hash, format } = content;
-    
+
     // Create a Send-compatible RNG
     let mut rng = rand::rngs::StdRng::from_entropy();
-    
+
     match format {
         BlobFormat::Raw => {
             let size = get_or_insert_size(connection, hash).await?;
@@ -160,13 +160,11 @@ async fn probe_complete(
             let request = GetRequest::new(*hash, ranges);
             let request = iroh_blobs::get::fsm::start(connection.clone(), request);
             let connected = request.next().await?;
-            let iroh_blobs::get::fsm::ConnectedNext::StartChild(child) =
-                connected.next().await?
+            let iroh_blobs::get::fsm::ConnectedNext::StartChild(child) = connected.next().await?
             else {
                 unreachable!("request does not include root");
             };
-            let index =
-                usize::try_from(child.child_offset()).expect("child offset too large");
+            let index = usize::try_from(child.child_offset()).expect("child offset too large");
             let hash = hs.get(index).expect("request inconsistent with hash seq");
             let at_blob_header = child.next(hash);
             let at_end_blob = at_blob_header.drain().await?;

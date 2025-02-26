@@ -1,7 +1,7 @@
-use reqwest::{Client, RequestBuilder, Url};
-use serde::{Deserialize, Serialize};
 use iroh::NodeId;
 use iroh_blobs::Hash;
+use reqwest::{Client, RequestBuilder, Url};
+use serde::{Deserialize, Serialize};
 
 use super::ApiRequest;
 
@@ -23,4 +23,4 @@ impl ApiRequest for Query {
         let url = base_url.join("api/v0/query").expect("Failed to join URL");
         client.post(url).json(&self)
     }
-} 
+}

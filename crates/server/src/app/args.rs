@@ -3,12 +3,13 @@ use std::error::Error;
 use clap::Subcommand;
 
 use super::ops::Init as InitOp;
-use super::ops::ListBlobs as ListBlobsOp;
-use super::ops::Probe as ProbeOp;
-use super::ops::Serve as ServeOp;
-use super::ops::Share as ShareOp;
+// use super::ops::ListBlobs as ListBlobsOp;
+// use super::ops::Probe as ProbeOp;
+// use super::ops::Query as QueryOp;
+// use super::ops::Serve as ServeOp;
+// use super::ops::Share as ShareOp;
 use super::ops::Status as StatusOp;
-use super::ops::Query as QueryOp;
+use super::ops::Node as NodeOp;
 
 pub use clap::Parser;
 
@@ -74,24 +75,26 @@ use crate::command_enum;
 
 command_enum! {
     (Init, InitOp),
-    (Serve, ServeOp),
+    // (Serve, ServeOp),
     (Status, StatusOp),
-    (Share, ShareOp),
-    (Query, QueryOp),
-    (Probe, ProbeOp),
-    (ListBlobs, ListBlobsOp),
+    (Node, NodeOp)
+    // (Share, ShareOp),
+    // (Query, QueryOp),
+    // (Probe, ProbeOp),
+    // (ListBlobs, ListBlobsOp),
 }
 
 impl fmt::Display for OpOutput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            OpOutput::Init(node_id) => write!(f, "device initialized with node id: {}", node_id),
-            OpOutput::Serve(_) => write!(f, ""),
-            OpOutput::Status(output) => write!(f, "{}", output),
-            OpOutput::Share(ticket) => write!(f, "{}", ticket),
-            OpOutput::Probe(result) => write!(f, "{}", result),
-            OpOutput::ListBlobs(output) => write!(f, "{}", output),
-            OpOutput::Query(output) => write!(f, "{}", output),
+            OpOutput::Init((node_id, eth_address)) => write!(f, "device initialized with node id: {} and eth address: {}", node_id, eth_address),
+            // OpOutput::Serve(_) => write!(f, ""),
+            OpOutput::Status(output)  => write!(f, "{}", output),
+            OpOutput::Node(_) => write!(f, ""),
+            // OpOutput::Share(ticket) => write!(f, "{}", ticket),
+            // OpOutput::Probe(result) => write!(f, "{}", result),
+            // OpOutput::ListBlobs(output) => write!(f, "{}", output),
+            // OpOutput::Query(output) => write!(f, "{}", output),
         }
     }
 }

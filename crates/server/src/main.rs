@@ -5,8 +5,6 @@
 
 
 mod app;
-mod server;
-mod version;
 
 use app::{Args, Op, Parser};
 

@@ -2,7 +2,9 @@
 #[allow(clippy::result_large_err)]
 #[allow(unused_imports)]
 #[allow(unused_variables)]
+mod api;
+mod error_handlers;
+mod health;
+mod server;
 
-pub mod config;
-pub mod node;
-pub mod version;
+pub use server::run;

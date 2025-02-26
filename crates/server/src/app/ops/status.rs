@@ -6,7 +6,8 @@ use super::api_client::{
 };
 
 use crate::app::args::Op;
-use crate::app::{Config, ConfigError};
+
+use jax::config::{Config, ConfigError};
 
 #[derive(Debug, clap::Args, Clone)]
 pub struct Status {}
