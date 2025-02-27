@@ -6,7 +6,8 @@ mod node;
 mod query;
 mod share;
 mod status;
-
+mod probe;
+mod pools;
 pub use api_client::{ApiClient, ApiError};
 pub use init::Init;
 pub use list::{List, ListError, ListOutput};
@@ -14,3 +15,5 @@ pub use node::Node;
 pub use query::{Query, QueryError, QueryOutput};
 pub use share::{Share, ShareError};
 pub use status::Status; 
+pub use probe::{Probe, ProbeError, ProbeOutput};
+pub use pools::{Pools, PoolsError, PoolsOutput};

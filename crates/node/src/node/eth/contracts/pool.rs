@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
+use std::collections::HashSet;
 
 use alloy::{
     eips::BlockNumberOrTag,
@@ -30,6 +31,10 @@ sol! {
     #[sol(rpc)]
     contract RewardPool {
         function enterPool(string memory nodeId) external;
+        function getAllPeers() external view returns (string[] memory);
+        function contentHash() external view returns (string memory);
+        function originatorNodeId() external view returns (string memory);
+        function initialize(address _jaxToken, string memory _hash, string memory _originatorNodeId) external;
     }
 }
 
@@ -139,4 +144,52 @@ impl PoolContract {
         let _receipt = tx.watch().await?;
         Ok(())
     }
+
+    pub async fn get_metadata(&self) -> Result<(iroh_blobs::Hash, NodeId)> {
+        let provider = ProviderBuilder::new()
+            .with_chain(alloy_chains::NamedChain::AnvilHardhat)
+            .wallet(EthereumWallet::from(self.private_key.clone()))
+            .on_ws(WsConnect::new(self.ws_url.as_str()))
+            .await?;
+        let contract = RewardPool::new(self.address, provider);
+        let hash = contract.contentHash().call().await?._0;
+        let originator = contract.originatorNodeId().call().await?._0;
+        let hash = iroh_blobs::Hash::from_str(&hash)?;
+        let originator = NodeId::from_str(&originator)?;
+        Ok((hash, originator))
+    }
+
+    pub async fn get_peers(&self) -> Result<Vec<NodeId>> {
+        let provider = ProviderBuilder::new()
+            .with_chain(alloy_chains::NamedChain::AnvilHardhat)
+            .wallet(EthereumWallet::from(self.private_key.clone()))
+            .on_ws(WsConnect::new(self.ws_url.as_str()))
+            .await?;
+        let contract = RewardPool::new(self.address, provider);
+        let peers = contract.getAllPeers().call().await?._0;
+        let mut peer_set = HashSet::new();
+        for peer in peers {
+            if let Ok(node_id) = peer.parse::<NodeId>() {
+                peer_set.insert(node_id);
+            }
+        }
+        Ok(peer_set.into_iter().collect())
+    }
+}
+
+// TODO: jank as hell to have this here
+pub async fn get_historical_peers(address: Address, ws_url: &Url) -> Result<HashSet<NodeId>> {
+    let provider = ProviderBuilder::new()
+        .with_chain(alloy_chains::NamedChain::AnvilHardhat)
+        .on_ws(WsConnect::new(ws_url.as_str()))
+        .await?;
+    let contract = RewardPool::new(address, provider);
+    let peers = contract.getAllPeers().call().await?._0;
+    let mut peer_set = HashSet::new();
+    for peer in peers {
+        if let Ok(node_id) = peer.parse::<NodeId>() {
+            peer_set.insert(node_id);
+        }
+    }
+    Ok(peer_set)
 }

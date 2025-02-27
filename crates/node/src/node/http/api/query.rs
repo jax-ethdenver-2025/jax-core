@@ -14,7 +14,7 @@ pub struct QueryLocationsRequest {
 #[derive(Serialize)]
 pub struct QueryLocationsResponse {
     local: bool,
-    nodes: Vec<iroh::NodeId>,
+    nodes: Vec<(iroh::NodeId, f64)>,
     message: String,
 }
 
@@ -22,16 +22,15 @@ pub async fn handler(
     State(state): State<NodeState>,
     Json(request): Json<QueryLocationsRequest>,
 ) -> Result<impl IntoResponse, QueryError> {
-    let nodes = state.tracker().get_peers_for_hash(request.hash)
+    // Get trust scores directly - this already includes peer information
+    let trust_scores = state.tracker().get_trust_for_hash(request.hash)
         .await
         .map_err(QueryError::Default)?;
 
     let blob_status = state.blobs_service().get_inner_blobs().client().status(request.hash.clone()).await?;
-    let local = match blob_status {
-        BlobStatus::Complete { .. } => true,
-        _ => false,
-    };
+    let local = matches!(blob_status, BlobStatus::Complete { .. });
 
+    let nodes = trust_scores.into_iter().collect::<Vec<_>>();
     let response = QueryLocationsResponse {
         local,
         nodes: nodes.clone(),

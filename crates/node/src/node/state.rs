@@ -36,6 +36,7 @@ impl State {
         // set up our endpoint
         let endpoint_socket_addr = config.endpoint_listen_addr();
         let iroh_secret_key = config.iroh_secret_key()?;
+        let iroh_node_id = iroh_secret_key.public();
         let _endpoint = create_endpoint(*endpoint_socket_addr, iroh_secret_key.clone()).await;
         let endpoint = Arc::new(_endpoint);
         // await making sure the endpoint is setup
@@ -50,6 +51,7 @@ impl State {
         let tracker = Tracker::new(
             shutdown_rx.clone(),
             config.eth_ws_rpc_url().clone(),
+            iroh_node_id,
             config.eth_signer().expect("valid eth signer"),
             blobs_service.clone(),
         ).expect("valid tracker");
