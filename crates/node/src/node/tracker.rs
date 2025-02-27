@@ -521,16 +521,34 @@ impl Tracker {
     /// Start background jobs for pool maintenance
     pub async fn start_background_jobs(&self) {
         let tracker = self.clone();
+        
+        // Try initial bootstrap with retries
+        for i in 0..3 {
+            match tracker.bootstrap().await {
+                Ok(_) => {
+                    tracing::info!("Successfully bootstrapped tracker");
+                    break;
+                }
+                Err(e) => {
+                    tracing::warn!("Bootstrap attempt {} failed: {}", i + 1, e);
+                    if i < 2 {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                    }
+                }
+            }
+        }
+
         let mut shutdown_rx = self.shutdown_rx.clone();
         
         // Spawn background task
         tokio::spawn(async move {
-            let update_interval = tokio::time::Duration::from_secs(10);
+            let update_interval = tokio::time::Duration::from_secs(30); // Increased from 10s
             let mut interval = tokio::time::interval(update_interval);
 
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
+                        tracing::debug!("Starting periodic pool update");
                         if let Err(e) = tracker.update_all_pools().await {
                             tracing::warn!("Failed to update pools: {}", e);
                         }
@@ -547,26 +565,33 @@ impl Tracker {
     /// Update all pools - fetch new peers and recalculate trust scores
     async fn update_all_pools(&self) -> Result<()> {
         let pools = self.pools.read().await.clone();
+        let mut updated_count = 0;
         
         for pool_key in pools {
-            // Skip if we're not in this pool
-            if let Some(eigen) = self.pool_trust.read().await.get(&pool_key) {
-                if let Some(fetcher) = eigen.get_fetcher() {
-                    let current_peers = fetcher.peers.read().await.clone();
-                    if !current_peers.contains(&self.current_node_id) {
-                        continue;
-                    }
-                }
-            }
-
-            // Probe pool and update trust scores
+            // Don't skip pools we're not in - we might want to join them
             match self.probe_pool(pool_key.clone()).await {
                 Ok(results) => {
-                    tracing::debug!(
+                    tracing::info!(
                         "Updated pool {} with {} peers", 
                         pool_key.address,
                         results.len()
                     );
+                    updated_count += 1;
+
+                    // Check if we're already in the pool on-chain before trying to join
+                    match get_historical_peers(pool_key.address, &self.eth_ws_url).await {
+                        Ok(chain_peers) => {
+                            if !chain_peers.contains(&self.current_node_id) {
+                                match self.enter_pool(pool_key.clone(), self.current_node_id).await {
+                                    Ok(_) => tracing::info!("Successfully joined pool {}", pool_key.address),
+                                    Err(e) => tracing::warn!("Failed to join pool {}: {}", pool_key.address, e)
+                                }
+                            } else {
+                                tracing::debug!("Already in pool {}, skipping join", pool_key.address);
+                            }
+                        }
+                        Err(e) => tracing::warn!("Failed to check pool membership for {}: {}", pool_key.address, e)
+                    }
                 }
                 Err(e) => {
                     tracing::warn!(
@@ -578,39 +603,56 @@ impl Tracker {
             }
 
             // Fetch historical peers from chain
-            if let Ok(historical_peers) = get_historical_peers(
-                pool_key.address,
-                &self.eth_ws_url
-            ).await {
-                for peer in historical_peers {
-                    self.add_pool_peer(pool_key.clone(), peer).await;
+            match get_historical_peers(pool_key.address, &self.eth_ws_url).await {
+                Ok(historical_peers) => {
+                    for peer in historical_peers {
+                        self.add_pool_peer(pool_key.clone(), peer).await;
+                    }
                 }
+                Err(e) => tracing::warn!("Failed to get historical peers for {}: {}", pool_key.address, e)
             }
         }
 
+        tracing::info!("Updated {} pools", updated_count);
         Ok(())
     }
 
     /// Bootstrap by discovering and joining available pools
     pub async fn bootstrap(&self) -> Result<()> {
+        tracing::info!("Starting bootstrap process...");
+        
         // Get factory contract
         let factory = self.factory_contract.read().await;
         let factory = factory.as_ref().ok_or_else(|| anyhow::anyhow!("Factory not initialized"))?;
 
         // Get all pools
         let pools = factory.get_all_pools().await?;
+        tracing::info!("Found {} pools during bootstrap", pools.len());
         
+        let mut joined_count = 0;
         for pool_address in pools {
             // Create pool contract to get metadata
-            let pool_contract = PoolContract::new(
+            let pool_contract = match PoolContract::new(
                 pool_address,
                 &self.eth_ws_url,
                 &self.eth_private_key,
                 self,
-            ).await?;
+            ).await {
+                Ok(contract) => contract,
+                Err(e) => {
+                    tracing::warn!("Failed to create contract for pool {}: {}", pool_address, e);
+                    continue;
+                }
+            };
 
             // Get pool metadata
-            let (hash, originator) = pool_contract.get_metadata().await?;
+            let (hash, originator) = match pool_contract.get_metadata().await {
+                Ok(metadata) => metadata,
+                Err(e) => {
+                    tracing::warn!("Failed to get metadata for pool {}: {}", pool_address, e);
+                    continue;
+                }
+            };
             
             let key = PoolKey {
                 hash,
@@ -619,9 +661,9 @@ impl Tracker {
 
             // Get peers from pool
             let peers = pool_contract.get_peers().await?;
+            tracing::debug!("Pool {} has {} peers", pool_address, peers.len());
 
             // Try to download from originator or peers
-            let mut success = false;
             let mut providers = vec![originator];
             providers.extend(peers);
 
@@ -633,22 +675,17 @@ impl Tracker {
                 ).expect("valid ticket");
 
                 if let Ok(_) = self.blobs_service.download_blob(&ticket).await {
-                    success = true;
+                    // Add pool and enter
+                    if let Ok(_) = self.add_pool(key.clone(), originator).await {
+                        joined_count += 1;
+                        tracing::info!("Successfully joined pool {} during bootstrap", pool_address);
+                    }
                     break;
-                }
-            }
-
-            if success {
-                // Add pool and enter if not already a peer
-                self.add_pool(key.clone(), originator).await?;
-                
-                let current_peers = self.get_pool_peers(key.clone()).await?;
-                if !current_peers.contains(&self.current_node_id) {
-                    self.enter_pool(key, self.current_node_id).await?;
                 }
             }
         }
 
+        tracing::info!("Bootstrap complete - joined {} pools", joined_count);
         Ok(())
     }
 }
