@@ -1,0 +1,50 @@
+use anyhow::Result;
+use iroh::Endpoint;
+use iroh_blobs::{
+    net_protocol::Blobs, 
+    store::fs::Store, 
+    Hash, 
+    ticket::BlobTicket,
+};
+use std::path::Path;
+use std::sync::Arc;
+
+/// Service that handles blob operations
+#[derive(Clone, Debug)]
+pub struct BlobsService {
+    blobs: Arc<Blobs<Store>>,
+}
+
+impl BlobsService {
+    /// Create a new blob service
+    pub async fn load(blobs_path: &Path, endpoint: Endpoint) -> Result<Self> {
+        let store = Store::load(blobs_path).await?;
+        let blobs = Blobs::builder(store).build(&endpoint);
+        Ok(Self {
+            blobs: Arc::new(blobs),
+        })
+    }
+
+    /// Store a blob with the given format
+    pub async fn store_blob(&self, data: Vec<u8>) -> Result<Hash> {
+        let hash = self.blobs.client().add_bytes(data).await?.hash;
+        Ok(hash)
+    }
+
+    // TODO: get ticket
+
+    /// Get the underlying Blobs instance
+    pub fn get_inner_blobs(&self) -> &Arc<Blobs<Store>> {
+        &self.blobs
+    }
+
+    /// Get a blob using a ticket
+    pub async fn download_blob(&self, ticket: &BlobTicket) -> Result<()> {
+        self.blobs.client()
+            .download(ticket.hash(), ticket.node_addr().clone() )
+            .await?
+            .finish()
+            .await?;
+        Ok(())
+    }
+}

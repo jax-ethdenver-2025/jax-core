@@ -1,0 +1,92 @@
+use std::sync::Arc;
+
+use alloy::primitives::Address;
+use alloy::signers::local::PrivateKeySigner;
+use anyhow::Result;
+use iroh::Endpoint;
+use iroh::NodeId;
+use iroh::SecretKey;
+
+use crate::config::{Config, ConfigError};
+
+use super::iroh::{await_relay_region, create_endpoint, BlobsService};
+use super::tracker::Tracker;
+
+use tokio::sync::watch;
+
+#[derive(Clone)]
+pub struct State {
+    iroh_secret_key: SecretKey,
+    eth_signer: PrivateKeySigner,
+    endpoint: Arc<Endpoint>,
+    blobs_service: BlobsService,
+    tracker: Tracker,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum StateSetupError {
+    #[error("default error: {0}")]
+    Default(#[from] anyhow::Error),
+    #[error("config error: {0}")]
+    Config(#[from] ConfigError),
+}
+
+impl State {
+    pub async fn from_config(config: &Config, shutdown_rx: watch::Receiver<()>) -> Result<Self, StateSetupError> {
+        // set up our endpoint
+        let endpoint_socket_addr = config.endpoint_listen_addr();
+        let iroh_secret_key = config.iroh_secret_key()?;
+        let _endpoint = create_endpoint(*endpoint_socket_addr, iroh_secret_key.clone()).await;
+        let endpoint = Arc::new(_endpoint);
+        // await making sure the endpoint is setup
+        let _ = await_relay_region(endpoint.as_ref().clone()).await;
+
+        // set up a blob service
+        let blobs_path = config.blobs_path();
+        let blobs_service = BlobsService::load(blobs_path, endpoint.as_ref().clone())
+            .await
+            .map_err(StateSetupError::Default)?;
+
+        let tracker = Tracker::new(
+            shutdown_rx.clone(),
+            config.eth_ws_rpc_url().clone(),
+            config.eth_signer().expect("valid eth signer"),
+            blobs_service.clone(),
+        ).expect("valid tracker");
+
+        // Initialize the factory contract
+        let factory_address = config.factory_contract_address();
+        tracker.init_factory(factory_address).await?;
+
+        // Create state with all components
+        let state = Self {
+            iroh_secret_key,
+            eth_signer: config.eth_signer().expect("valid eth signer"),
+            endpoint,
+            blobs_service,
+            tracker,
+        };
+
+        Ok(state)
+    }
+
+    pub fn iroh_node_id(&self) -> NodeId {
+        self.iroh_secret_key.public()
+    }
+
+    pub fn eth_address(&self) -> Address {
+        self.eth_signer.address()
+    }
+
+    pub fn endpoint(&self) -> &Endpoint {
+        &self.endpoint
+    }
+
+    pub fn blobs_service(&self) -> &BlobsService {
+        &self.blobs_service
+    }
+
+    pub fn tracker(&self) -> &Tracker {
+        &self.tracker
+    }
+}
