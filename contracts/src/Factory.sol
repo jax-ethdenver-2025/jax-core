@@ -4,31 +4,35 @@ pragma solidity ^0.8.13;
 import {Initializable} from "solady/utils/Initializable.sol";
 import {LibClone} from "solady/utils/LibClone.sol";
 import {Ownable} from "solady/auth/Ownable.sol";
-import {Pool} from "./Pool.sol";
+import {RewardPool} from "./RewardPool.sol";
 
 contract Factory {
     address public immutable poolImplementation;
     uint256 public poolNonce;
-    
-    event PoolCreated(address indexed poolAddress, string hash);
+    address public immutable jaxToken;
 
-    constructor(address _poolImplementation) {
+    /* Events */
+
+    event PoolCreated(address indexed poolAddress, string hash, string nodeId);
+
+    /* Constructor */
+
+    constructor(address _poolImplementation, address _jaxToken) {
         poolImplementation = _poolImplementation;
+        jaxToken = _jaxToken;
     }
 
-    // TODO: add signature over hash to 
-    //  ensure the hash is valid
-    // TODO: advertise the node id along with the hash
-    //  so that data can be retrieved from the node
+    /* Public Functions */
+
+    // TODO: add signature verification
     function createPool(
-        string memory hash
-        // assume format is raw for now
+        string memory hash,
+        string memory nodeId
     ) external returns (address poolAddress) {
         _checksBeforeCreation();
 
-        // TODO: add all this stuff to the pool
         poolAddress = _create();
-        emit PoolCreated(poolAddress, hash);
+        emit PoolCreated(poolAddress, hash, nodeId);
     }
 
     function _checksBeforeCreation() internal view {
@@ -40,6 +44,6 @@ contract Factory {
         poolNonce++;
 
         poolAddress = LibClone.cloneDeterministic(poolImplementation, salt);
-        Pool(poolAddress).initialize();
+        RewardPool(poolAddress).initialize(jaxToken);
     }
 }

@@ -3,22 +3,21 @@ pragma solidity ^0.8.13;
 
 import {Script, console} from "forge-std/Script.sol";
 import {Factory} from "../src/Factory.sol";
-import {Pool} from "../src/Pool.sol";
+import {JaxToken} from "../src/JaxToken.sol";
+import {RewardPool} from "../src/RewardPool.sol";
 
 contract FactoryScript is Script {
     Factory public factory;
-    Pool public pool;
+    RewardPool public pool;
 
     function setUp() public {}
 
     function run() public {
         vm.startBroadcast();
 
-        address poolImplementation = address(new Pool());
-        factory = new Factory(poolImplementation);
-
-        address poolAddress = factory.createPool();
-        pool = Pool(poolAddress);
+        address poolImplementation = address(new RewardPool());
+        address jaxToken = address(new JaxToken(msg.sender));
+        factory = new Factory(poolImplementation, jaxToken);
 
         vm.stopBroadcast();
     }
