@@ -3,6 +3,7 @@ use std::fmt;
 use async_trait::async_trait;
 use iroh::NodeId;
 use iroh_blobs::Hash;
+use alloy::primitives::Address;
 
 use jax::config::{Config, ConfigError};
 
@@ -10,14 +11,10 @@ use crate::cli::args::Op;
 use super::api_client::{api_requests, ApiClient, ApiError};
 
 #[derive(Debug, clap::Args, Clone)]
-pub struct Query {
-    /// The hash to query locations for
-    #[clap(value_parser)]
-    hash: Hash,
-}
+pub struct Pools {}
 
 #[derive(Debug, thiserror::Error)]
-pub enum QueryError {
+pub enum PoolsError {
     #[error("api error: {0}")]
     Api(#[from] ApiError),
     #[error("config error: {0}")]
@@ -25,19 +22,21 @@ pub enum QueryError {
 }
 
 #[derive(Debug)]
-pub struct QueryOutput {
-    hash: Hash,
-    nodes: Vec<(NodeId, f64)>,
+pub struct PoolsOutput {
+    pools: Vec<(Address, Hash, Vec<(NodeId, f64)>)>,
 }
 
-impl fmt::Display for QueryOutput {
+impl fmt::Display for PoolsOutput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Locations for blob {}", self.hash)?;
-        if self.nodes.is_empty() {
-            writeln!(f, "  No known locations")?;
+        writeln!(f, "Known pools:")?;
+        if self.pools.is_empty() {
+            writeln!(f, "  No pools found")?;
         } else {
-            for (node, trust) in &self.nodes {
-                writeln!(f, "  {} (trust: {:.3})", node, trust)?;
+            for (address, hash, peers) in &self.pools {
+                writeln!(f, "  Pool {} for blob {}:", address, hash)?;
+                for (node, trust) in peers {
+                    writeln!(f, "    {} (trust: {:.3})", node, trust)?;
+                }
             }
         }
         Ok(())
@@ -45,21 +44,19 @@ impl fmt::Display for QueryOutput {
 }
 
 #[async_trait]
-impl Op for Query {
-    type Error = QueryError;
-    type Output = QueryOutput;
+impl Op for Pools {
+    type Error = PoolsError;
+    type Output = PoolsOutput;
 
     async fn execute(&self) -> Result<Self::Output, Self::Error> {
         let config = Config::from_env_or_disk()?;
         let client = ApiClient::new(config.remote_url().as_ref())?;
 
-        let request = api_requests::Query { hash: self.hash };
-
+        let request = api_requests::Pools {};
         let response = client.call(request).await?;
 
-        Ok(QueryOutput {
-            hash: self.hash,
-            nodes: response.nodes,
+        Ok(PoolsOutput {
+            pools: response.pools,
         })
     }
-}
+} 

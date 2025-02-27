@@ -11,6 +11,10 @@ contract Factory {
     uint256 public poolNonce;
     address public immutable jaxToken;
 
+    // Add storage for pools
+    address[] public pools;
+    mapping(address => bool) public isPool;
+
     /* Events */
 
     event PoolCreated(address indexed poolAddress, string hash, string nodeId);
@@ -22,6 +26,11 @@ contract Factory {
         jaxToken = _jaxToken;
     }
 
+    // Add function to get all pools
+    function getAllPools() external view returns (address[] memory) {
+        return pools;
+    }
+
     /* Public Functions */
 
     // TODO: add signature verification
@@ -31,7 +40,12 @@ contract Factory {
     ) external returns (address poolAddress) {
         _checksBeforeCreation();
 
-        poolAddress = _create();
+        poolAddress = _create(hash, nodeId);
+        
+        // Track the new pool
+        pools.push(poolAddress);
+        isPool[poolAddress] = true;
+        
         emit PoolCreated(poolAddress, hash, nodeId);
     }
 
@@ -39,11 +53,14 @@ contract Factory {
       // TODO Not implemented
     }
 
-    function _create() internal returns (address poolAddress) {
+    function _create(
+        string memory hash,
+        string memory nodeId
+    ) internal returns (address poolAddress) {
         bytes32 salt = keccak256(abi.encodePacked(poolNonce));
         poolNonce++;
 
         poolAddress = LibClone.cloneDeterministic(poolImplementation, salt);
-        RewardPool(poolAddress).initialize(jaxToken);
+        RewardPool(poolAddress).initialize(jaxToken, hash, nodeId);
     }
 }

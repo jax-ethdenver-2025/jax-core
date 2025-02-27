@@ -8,12 +8,14 @@ mod share;
 mod probe;
 mod query;
 mod create_pool;
+mod pools;
 
 pub use list::handler as list_handler;
 pub use share::handler as share_handler;
 pub use probe::handler as probe_handler;
 pub use query::handler as query_handler;
 pub use create_pool::handler as create_pool_handler;
+pub use pools::handler as pools_handler;
 
 use crate::node::State as NodeState;
 
@@ -30,6 +32,7 @@ pub fn router(state: NodeState) -> Router<NodeState> {
         .route("/probe", routing::post(probe_handler))
         .route("/query", routing::post(query_handler))
         .route("/pool", routing::post(create_pool_handler))
+        .route("/pools", routing::get(pools_handler))
         .with_state(state)
         .layer(cors_layer)
 }

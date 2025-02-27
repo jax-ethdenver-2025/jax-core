@@ -116,6 +116,19 @@ impl FactoryContract {
         Ok(())
     }
 
+    /// Get all deployed pools
+    pub async fn get_all_pools(&self) -> Result<Vec<Address>> {
+        let provider = ProviderBuilder::new()
+            .with_chain(alloy_chains::NamedChain::AnvilHardhat)
+            .wallet(EthereumWallet::from(self.private_key.clone()))
+            .on_builtin(self.ws_url.as_str())
+            .await?;
+
+        let factory = Factory::new(self.address, provider);
+        let pools = factory.getAllPools().call().await?._0;
+        Ok(pools)
+    }
+
     pub async fn create_pool(&self, hash: Hash, node_id: NodeId) -> Result<()> {
         let provider = ProviderBuilder::new()
             .with_chain(alloy_chains::NamedChain::AnvilHardhat)

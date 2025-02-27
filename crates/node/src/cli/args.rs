@@ -8,6 +8,8 @@ use super::ops::Query as QueryOp;
 use super::ops::Share as ShareOp;
 use super::ops::Status as StatusOp;
 use super::ops::Node as NodeOp;
+use super::ops::Probe as ProbeOp;
+use super::ops::Pools as PoolsOp;
 
 pub use clap::Parser;
 
@@ -78,6 +80,8 @@ command_enum! {
     (List, ListOp),
     (Query, QueryOp),
     (Share, ShareOp),
+    (Probe, ProbeOp),
+    (Pools, PoolsOp),
 }
 
 impl fmt::Display for OpOutput {
@@ -89,6 +93,8 @@ impl fmt::Display for OpOutput {
             OpOutput::List(output) => write!(f, "{}", output),
             OpOutput::Query(output) => write!(f, "{}", output),
             OpOutput::Share(output) => write!(f, "{}", output),
+            OpOutput::Probe(output) => write!(f, "{}", output),
+            OpOutput::Pools(output) => write!(f, "{}", output),
         }
     }
 }
