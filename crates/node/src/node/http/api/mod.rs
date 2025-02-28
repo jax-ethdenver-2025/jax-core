@@ -30,7 +30,7 @@ pub fn router(state: NodeState) -> Router<NodeState> {
         .route("/share", routing::post(share_handler))
         .route("/list", routing::get(list_handler))
         .route("/probe", routing::post(probe_handler))
-        .route("/query", routing::post(query_handler))
+        .route("/query/:hash", routing::get(query_handler))
         .route("/pool", routing::post(create_pool_handler))
         .route("/pools", routing::get(pools_handler))
         .with_state(state)

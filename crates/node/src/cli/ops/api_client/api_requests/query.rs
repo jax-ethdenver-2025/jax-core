@@ -20,7 +20,7 @@ impl ApiRequest for Query {
     type Response = QueryResponse;
 
     fn build_request(self, base_url: &Url, client: &Client) -> RequestBuilder {
-        let url = base_url.join("api/v0/query").expect("Failed to join URL");
-        client.post(url).json(&self)
+        let url = base_url.join(&format!("api/v0/query/{}", self.hash)).expect("Failed to join URL");
+        client.get(url).json(&self)
     }
 }

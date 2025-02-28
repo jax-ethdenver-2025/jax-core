@@ -1,15 +1,10 @@
-use axum::extract::{Json, State};
+use axum::extract::{Json, State, Path};
 use axum::response::{IntoResponse, Response};
 use iroh_blobs::rpc::client::blobs::BlobStatus;
 use iroh_blobs::Hash;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::node::State as NodeState;
-
-#[derive(Deserialize)]
-pub struct QueryLocationsRequest {
-    hash: Hash,
-}
 
 #[derive(Serialize)]
 pub struct QueryLocationsResponse {
@@ -20,12 +15,12 @@ pub struct QueryLocationsResponse {
 
 pub async fn handler(
     State(state): State<NodeState>,
-    Json(request): Json<QueryLocationsRequest>,
+    Path(hash): Path<Hash>,
 ) -> Result<impl IntoResponse, QueryError> {
     // Get trust scores directly - this already includes peer information
     let trust_scores = state
         .tracker()
-        .get_trust_for_hash(request.hash)
+        .get_trust_for_hash(hash)
         .await
         .map_err(QueryError::Default)?;
 
@@ -33,7 +28,7 @@ pub async fn handler(
         .blobs_service()
         .get_inner_blobs()
         .client()
-        .status(request.hash.clone())
+        .status(hash.clone())
         .await?;
     let local = matches!(blob_status, BlobStatus::Complete { .. });
 
@@ -41,7 +36,7 @@ pub async fn handler(
     let response = QueryLocationsResponse {
         local,
         nodes: nodes.clone(),
-        message: format!("Found {} nodes hosting blob {}", nodes.len(), request.hash),
+        message: format!("Found {} nodes hosting blob {}", nodes.len(), hash),
     };
 
     Ok((axum::http::StatusCode::OK, Json(response)))

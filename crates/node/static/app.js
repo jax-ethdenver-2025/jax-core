@@ -96,10 +96,9 @@ document.querySelector('#query-form')?.addEventListener('submit', async (e) => {
     const hash = e.target.hash.value;
 
     try {
-        const res = await fetch(API.QUERY, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ hash })
+        const res = await fetch(API.QUERY + '/' + hash, {
+            method: 'GET',
+            headers: {'Content-Type': 'application/json'}
         });
         const data = await res.json();
 
@@ -136,10 +135,12 @@ document.querySelector('#query-form')?.addEventListener('submit', async (e) => {
 
 async function queryContent(hash) {
     try {
-        const res = await fetch(API.QUERY, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ hash })
+        console.log('Querying content for hash:', hash);
+        console.log('API.QUERY:', API.QUERY);
+        console.log('API.QUERY + "/" + hash:', API.QUERY + '/' + hash);
+        const res = await fetch(API.QUERY + '/' + hash, {
+            method: 'GET',
+            headers: {'Content-Type': 'application/json'}
         });
         const data = await res.json();
         
