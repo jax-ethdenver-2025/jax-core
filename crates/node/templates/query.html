@@ -11,7 +11,7 @@
     <form id="query-form" class="form">
         <div class="form-group">
             <label for="hash">Content Hash:</label>
-            <input type="text" id="hash" name="hash" required>
+            <input type="text" placeholder="enter hash here" id="hash" name="hash" required>
         </div>
         
         <button type="submit">Query</button>
@@ -20,6 +20,17 @@
     <div id="query-message"></div>
     <div id="query-results"></div>
     
+    <script>
+        // Get hash from URL query parameters and fill input field
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const hashParam = urlParams.get('hash');
+            if (hashParam) {
+                document.getElementById('hash').value = hashParam;
+            }
+        });
+    </script>
+
     {% if let Some(nodes) = nodes %}
     <div class="results">
         <h3>Content Locations:</h3>

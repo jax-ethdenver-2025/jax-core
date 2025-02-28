@@ -18,6 +18,11 @@
             <label for="node">Node ID:</label>
             <input type="text" id="node" name="node" required>
         </div>
+
+        <div class="form-group">
+            <label for="address">Pool Address (optional):</label>
+            <input type="text" id="address" name="address">
+        </div>
         
         <button type="submit">Probe</button>
     </form>
@@ -28,7 +33,6 @@
     {% if let Some(stats) = stats %}
     <div class="results">
         <h3>Probe Results:</h3>
-        <p>Time Elapsed: {{ stats.elapsed }}</p>
         <p>Bytes Read: {{ stats.bytes_read }}</p>
         <p>Bytes Written: {{ stats.bytes_written }}</p>
     </div>
