@@ -6,23 +6,27 @@ import {console2} from "forge-std/Test.sol";
 import "forge-std/Test.sol";
 import "../src/RewardPool.sol";
 import "../src/Factory.sol";
-import "../src/JaxToken.sol";
 import "../test/mocks/AVSMock.sol";
 
 contract BaseTest is Test {
     RewardPool pool;
-    JaxToken jaxToken;
     Factory factory;
     AVSMock avs;
     address user = makeAddr("user1");
   
     function setUp() public {
         address poolImplementation = address(new RewardPool());
-        jaxToken = new JaxToken(user);
         avs = new AVSMock();
-        factory = new Factory(poolImplementation, address(jaxToken), address(avs));
+        factory = new Factory(poolImplementation, address(avs));
 
-        pool = RewardPool(factory.createPool("test", "user1"));
+        bytes memory h = hex"b0d8bdfd9f4d1023dae836b2e41da5019d20c60965dc40943e2c10f2ad4ee49ab0d8bdfd9f4d1023dae836b2e41da5019d20c60965dc";
+
+        pool = RewardPool(factory.createPool(string(h)));
+    }
+
+    function test_poolExists() public {
+        uint256 poolCodeSize = address(pool).code.length;
+        assertGt(poolCodeSize, 0);
     }
 
     function test_verifySignature() public {
@@ -30,17 +34,54 @@ contract BaseTest is Test {
         bytes32 r = 0xa6161c95fd4e3237b7dd12cc3052aaa69382510ecb5b89c2fbeb8b6efb78266b;
         bytes32 s = 0x81160af2842235a0257fc1d3e968c2c1c9f56f117da3186effcaeda256c38a0d;
         bytes memory m = hex"b0d8bdfd9f4d1023dae836b2e41da5019d20c60965dc40943e2c10f2ad4ee49ab0d8bdfd9f4d1023dae836b2e41da5019d20c60965dc";
-        factory.verifySignature(k, r, s, m);
-    }
-
-    function test_verifyAgainstAVS() public {
-        bytes32 data = keccak256(abi.encodePacked(user));
-        vm.expectCall(address(avs), abi.encodeCall(IAVS.verify, (data)));
-        pool.verifyAgainstAVS(data);
+        pool.verify(k, r, s, m);
     }
 
     function test_getWalletProviders() public {
         vm.expectCall(address(avs), abi.encodeCall(IAVS.getWalletProviders, ()));
         pool.getWalletProviders();
+    }
+
+    function test_deposit() public {
+        uint256 depositAmount = 1 ether;
+        vm.deal(user, depositAmount);
+        
+        vm.prank(user);
+        pool.deposit{value: depositAmount}();
+        
+        assertEq(pool.balances(user), depositAmount);
+    }
+
+    function test_setBountyPerEpoch() public {
+        uint256 bounty = 1 ether;
+        vm.prank(pool.owner());
+        pool.setBountyPerEpoch(bounty);
+        
+        assertEq(pool.bountyPerEpoch(), bounty);
+    }
+
+    function test_revertIfNotOWnerSetBounty() public {
+        vm.prank(makeAddr("notOwner"));
+        vm.expectRevert();
+        pool.setBountyPerEpoch(1 ether);
+    }
+
+    function test_validPoolEntrance() public {
+        string memory nodeId = "node1";
+        bytes32 k = 0x06cf14cfae0ff9fe7fdf773202029a3e8976465c8919f4840d1c3c77c8162435;
+        bytes32 r = 0xa6161c95fd4e3237b7dd12cc3052aaa69382510ecb5b89c2fbeb8b6efb78266b;
+        bytes32 s = 0x81160af2842235a0257fc1d3e968c2c1c9f56f117da3186effcaeda256c38a0d;
+        bytes memory m = hex"b0d8bdfd9f4d1023dae836b2e41da5019d20c60965dc40943e2c10f2ad4ee49ab0d8bdfd9f4d1023dae836b2e41da5019d20c60965dc";
+        Signature memory signature = Signature(k, r, s, m);
+        pool.enterPool(nodeId, signature);
+
+        string[] memory peers = pool.getAllPeers();
+        assertEq(peers.length, 1);
+        assertEq(peers[0], nodeId);
+    }
+
+    function test_invalidPoolEntrance(string memory nodeId, Signature memory signature) public {
+        vm.expectRevert();
+        pool.enterPool(nodeId, signature);
     }
 }

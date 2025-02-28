@@ -10,7 +10,6 @@ import {RewardPool} from "./RewardPool.sol";
 contract Factory {
     address public immutable poolImplementation;
     uint256 public poolNonce;
-    address public immutable jaxToken;
     address public immutable avs;
     // Add storage for pools
     address[] public pools;
@@ -18,13 +17,12 @@ contract Factory {
 
     /* Events */
 
-    event PoolCreated(address indexed poolAddress, string hash, string nodeId);
+    event PoolCreated(address indexed poolAddress, string hash);
 
     /* Constructor */
 
-    constructor(address _poolImplementation, address _jaxToken, address _avs) {
+    constructor(address _poolImplementation, address _avs) {
         poolImplementation = _poolImplementation;
-        jaxToken = _jaxToken;
         avs = _avs;
     }
 
@@ -37,30 +35,24 @@ contract Factory {
 
     // TODO: add signature verification
     function createPool(
-        string memory hash,
-        string memory nodeId
+        string memory hash
     ) external returns (address poolAddress) {
-        poolAddress = _create(hash, nodeId);
+        poolAddress = _create(hash);
         
         // Track the new pool
         pools.push(poolAddress);
         isPool[poolAddress] = true;
         
-        emit PoolCreated(poolAddress, hash, nodeId);
-    }
-
-    function verifySignature(bytes32 k, bytes32 r, bytes32 s, bytes memory m) public pure returns (bool) {
-        return Ed25519.verify(k, r, s, m);
+        emit PoolCreated(poolAddress, hash);
     }
 
     function _create(
-        string memory hash,
-        string memory nodeId
+        string memory hash
     ) internal returns (address poolAddress) {
         bytes32 salt = keccak256(abi.encodePacked(poolNonce));
         poolNonce++;
 
         poolAddress = LibClone.cloneDeterministic(poolImplementation, salt);
-        RewardPool(poolAddress).initialize(jaxToken, avs, hash, nodeId);
+        RewardPool(poolAddress).initialize(avs, hash);
     }
 }
