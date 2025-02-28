@@ -22,11 +22,12 @@ pub async fn handler(State(state): State<NodeState>) -> Result<impl IntoResponse
     let pools_vec = pools
         .into_iter()
         .map(|(key, trust_scores)| {
-            (
-                key.address,
-                key.hash,
-                trust_scores.into_iter().collect::<Vec<_>>(),
-            )
+            let mut peers = trust_scores.into_iter().collect::<Vec<_>>();
+            // Sort peers by trust score (descending)
+            peers.sort_by(|(_, a_trust), (_, b_trust)| {
+                b_trust.partial_cmp(a_trust).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            (key.address, key.hash, peers)
         })
         .collect::<Vec<_>>();
 

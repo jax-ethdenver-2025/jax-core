@@ -187,23 +187,6 @@ impl PoolContract {
         let hash = iroh_blobs::Hash::from_str(&hash)?;
         Ok(hash)
     }
-
-    pub async fn get_peers(&self) -> Result<Vec<NodeId>> {
-        let provider = ProviderBuilder::new()
-            .with_chain(alloy_chains::NamedChain::AnvilHardhat)
-            .wallet(EthereumWallet::from(self.private_key.clone()))
-            .on_ws(WsConnect::new(self.ws_url.as_str()))
-            .await?;
-        let contract = RewardPool::new(self.address, provider);
-        let peers = contract.getAllPeers().call().await?._0;
-        let mut peer_set = HashSet::new();
-        for peer in peers {
-            if let Ok(node_id) = peer.parse::<NodeId>() {
-                peer_set.insert(node_id);
-            }
-        }
-        Ok(peer_set.into_iter().collect())
-    }
 }
 
 // TODO: jank as hell to have this here
