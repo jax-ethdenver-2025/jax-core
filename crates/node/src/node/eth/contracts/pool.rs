@@ -1,7 +1,7 @@
 use std::collections::HashSet;
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
-use alloy::primitives::{Bytes, FixedBytes};
+use alloy::primitives::{Bytes, FixedBytes, U256};
 use alloy::{
     eips::BlockNumberOrTag,
     network::EthereumWallet,
@@ -41,10 +41,10 @@ sol! {
     #[sol(rpc)]
     contract RewardPool {
         function enterPool(string memory nodeId, Signature memory signature) external;
-        function getHash() external view returns (string memory);
-        function getAllPeers() external view returns (string[] memory);
+        function getHash() external view returns (bytes32);
+        function getPeers() external view returns (string[] memory);
+        function getBalance() external view returns (uint256);
         function deposit() external payable;
-        function setBountyPerEpoch(uint256 amount) external;
     }
 }
 
@@ -176,6 +176,29 @@ impl PoolContract {
         Ok(())
     }
 
+    pub async fn get_balance(&self) -> Result<U256> {
+        let provider = ProviderBuilder::new()
+            .with_chain(alloy_chains::NamedChain::AnvilHardhat)
+            .on_ws(WsConnect::new(self.ws_url.as_str()))
+            .await?;
+        let contract = RewardPool::new(self.address, provider);
+        let balance = contract.getBalance().call().await?._0;
+        Ok(balance)
+    }
+
+    pub async fn deposit(&self, amount: u64) -> Result<()> {
+        let provider = ProviderBuilder::new()
+            .with_chain(alloy_chains::NamedChain::AnvilHardhat)
+            .wallet(EthereumWallet::from(self.private_key.clone()))
+            .on_ws(WsConnect::new(self.ws_url.as_str()))
+            .await?;
+        let contract = RewardPool::new(self.address, provider);
+        let u256_amount = U256::from(amount);
+        let tx = contract.deposit().value(u256_amount).send().await?;
+        let _receipt = tx.watch().await?;
+        Ok(())
+    }
+
     pub async fn get_hash(&self) -> Result<iroh_blobs::Hash> {
         let provider = ProviderBuilder::new()
             .with_chain(alloy_chains::NamedChain::AnvilHardhat)
@@ -183,8 +206,11 @@ impl PoolContract {
             .on_ws(WsConnect::new(self.ws_url.as_str()))
             .await?;
         let contract = RewardPool::new(self.address, provider);
-        let hash = contract.getHash().call().await?._0;
-        let hash = iroh_blobs::Hash::from_str(&hash)?;
+        let hash_fixed_bytes = contract.getHash().call().await?._0;
+        let hash_vec = hash_fixed_bytes.as_slice().to_vec();
+        let mut hash_bytes = [0u8; 32];
+        hash_bytes.copy_from_slice(hash_vec.as_slice());
+        let hash = iroh_blobs::Hash::from_bytes(hash_bytes);
         Ok(hash)
     }
 }
@@ -196,7 +222,7 @@ pub async fn get_peers(address: Address, ws_url: &Url) -> Result<HashSet<NodeId>
         .on_ws(WsConnect::new(ws_url.as_str()))
         .await?;
     let contract = RewardPool::new(address, provider);
-    let peers = contract.getAllPeers().call().await?._0;
+    let peers = contract.getPeers().call().await?._0;
     let mut peer_set = HashSet::new();
     for peer in peers {
         if let Ok(node_id) = peer.parse::<NodeId>() {

@@ -18,6 +18,7 @@ document.querySelector('#share-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const path = e.target.path.value;
     const createPool = e.target.create_pool.checked;
+    const value = e.target.value.value;
 
     try {
         // Share the file
@@ -48,45 +49,6 @@ document.querySelector('#share-form')?.addEventListener('submit', async (e) => {
         showMessage('share-message', message);
     } catch (err) {
         showMessage('share-message', err.message, true);
-    }
-});
-
-// Probe form handler
-document.querySelector('#probe-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const hash = e.target.hash.value;
-    const node = e.target.node.value;
-    const address = e.target.address.value;
-
-    try {
-        const res = await fetch(API.PROBE, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ 
-                hash, 
-                node,
-                address: address || undefined 
-            })
-        });
-        const data = await res.json();
-
-        if (!res.ok) throw new Error(data.error);
-
-        const resultsDiv = document.getElementById('probe-results');
-        resultsDiv.innerHTML = `
-            <h3>Probe Results:</h3>
-            <div class="results-box">
-                ${data.stats ? `
-                    <p>Bytes Read: ${data.stats.bytes_read}</p>
-                    <p>Bytes Written: ${data.stats.bytes_written}</p>
-                ` : ''}
-                <p class="message">${data.message}</p>
-                ${data.trust_updated ? '<p class="success">Trust scores updated</p>' : ''}
-            </div>
-        `;
-        showMessage('probe-message', 'Probe completed successfully');
-    } catch (err) {
-        showMessage('probe-message', err.message, true);
     }
 });
 

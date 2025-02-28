@@ -3,12 +3,13 @@ use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::Serialize;
+use alloy::primitives::U256;
 
 use crate::node::State as NodeState;
 
 #[derive(Serialize)]
 pub struct PoolsResponse {
-    pools: Vec<(Address, iroh_blobs::Hash, Vec<(iroh::NodeId, f64)>)>,
+    pools: Vec<(Address, iroh_blobs::Hash, U256, Vec<(iroh::NodeId, f64)>)>,
     message: String,
 }
 
@@ -27,7 +28,7 @@ pub async fn handler(State(state): State<NodeState>) -> Result<impl IntoResponse
             peers.sort_by(|(_, a_trust), (_, b_trust)| {
                 b_trust.partial_cmp(a_trust).unwrap_or(std::cmp::Ordering::Equal)
             });
-            (key.address, key.hash, peers)
+            (key.key.address, key.key.hash, key.balance, peers)
         })
         .collect::<Vec<_>>();
 

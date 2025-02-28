@@ -1,3 +1,4 @@
+use alloy::primitives::U256;
 use axum::extract::{Json, State};
 use axum::response::{IntoResponse, Response};
 use iroh_blobs::ticket::BlobTicket;
@@ -10,6 +11,7 @@ use crate::node::State as NodeState;
 #[derive(Deserialize)]
 pub struct ShareRequest {
     path: String,
+    initial_value: Option<U256>,
 }
 
 #[derive(Serialize)]
@@ -45,14 +47,32 @@ pub async fn handler(
     let ticket =
         BlobTicket::new(node_id.into(), hash, format).map_err(ShareError::BlobOperation)?;
 
+    // If initial value is provided, create pool
+    if let Some(initial_value) = request.initial_value {
+        // Validate user has enough balance
+        let eth_address = state.eth_address();
+        let tracker = state.tracker();
+        let balance = tracker.get_address_balance(eth_address).await.map_err(ShareError::Default)?;
+        
+        if balance < initial_value {
+            return Err(ShareError::InsufficientBalance(balance, initial_value));
+        }
+
+        // Create pool with initial value
+        state.tracker().create_pool(hash, Some(initial_value))
+            .await
+            .map_err(ShareError::Default)?;
+    }
+
     let hash_str = hash.to_string();
 
     let response = ShareResponse {
         ticket: ticket.to_string(),
         hash: hash_str,
         message: format!(
-            "File '{}' has been added to the blob store and announced to the network",
-            abs_path.display()
+            "File '{}' has been added to the blob store and announced to the network{}",
+            abs_path.display(),
+            if request.initial_value.is_some() { " with initial pool value" } else { "" }
         ),
     };
 
@@ -67,6 +87,8 @@ pub enum ShareError {
     Io(std::io::Error),
     #[error("blob operation failed: {0}")]
     BlobOperation(anyhow::Error),
+    #[error("insufficient balance (have {0}, need {1})")]
+    InsufficientBalance(U256, U256),
 }
 
 impl IntoResponse for ShareError {
@@ -83,6 +105,10 @@ impl IntoResponse for ShareError {
             ShareError::Default(e) => (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Error: {}", e),
+            ),
+            ShareError::InsufficientBalance(have, need) => (
+                axum::http::StatusCode::BAD_REQUEST,
+                format!("Insufficient balance: have {}, need {}", have, need),
             ),
         };
 

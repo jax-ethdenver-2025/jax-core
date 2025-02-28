@@ -1,6 +1,7 @@
 use axum::extract::{Json, State};
 use axum::response::{IntoResponse, Response};
 use iroh_blobs::Hash;
+use alloy::primitives::U256;
 use serde::{Deserialize, Serialize};
 
 use crate::node::State as NodeState;
@@ -8,7 +9,7 @@ use crate::node::State as NodeState;
 #[derive(Deserialize)]
 pub struct CreatePoolRequest {
     hash: Hash,
-    value: Option<u64>,
+    value: Option<U256>,
 }
 
 #[derive(Serialize)]

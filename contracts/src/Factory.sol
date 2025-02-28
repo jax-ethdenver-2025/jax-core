@@ -9,17 +9,16 @@ import {RewardPool} from "./RewardPool.sol";
 
 contract Factory {
     address public immutable poolImplementation;
-    uint256 public poolNonce;
     address public immutable avs;
     // Add storage for pools
     address[] public pools;
     mapping(address => bool) public isPool;
     // Add mapping for hash tracking
-    mapping(string => bool) public usedHashes;
+    mapping(bytes32 => bool) public usedHashes;
 
     /* Events */
 
-    event PoolCreated(address indexed poolAddress, string hash);
+    event PoolCreated(address indexed poolAddress, bytes32 hash, uint256 balance);
 
     /* Constructor */
 
@@ -36,7 +35,7 @@ contract Factory {
     /* Public Functions */
 
     function createPool(
-        string memory hash
+        bytes32 hash
     ) external payable returns (address poolAddress) {
         // Check if hash is already used
         require(!usedHashes[hash], "Hash already used");
@@ -48,15 +47,14 @@ contract Factory {
         isPool[poolAddress] = true;
         usedHashes[hash] = true;
         
-        emit PoolCreated(poolAddress, hash);
+        emit PoolCreated(poolAddress, hash, msg.value);
     }
 
     function _create(
-        string memory hash,
+        bytes32 hash,
         uint256 value
     ) internal returns (address poolAddress) {
-        bytes32 salt = keccak256(abi.encodePacked(poolNonce));
-        poolNonce++;
+        bytes32 salt = hash;
 
         poolAddress = LibClone.cloneDeterministic(poolImplementation, salt);
         RewardPool(poolAddress).initialize{value: value}(avs, hash);

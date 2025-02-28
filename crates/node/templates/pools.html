@@ -10,11 +10,12 @@
     {% if pools.is_empty() %}
         <p>No pools found</p>
     {% else %}
-        {% for (address, hash, peers) in pools %}
+        {% for (address, hash, balance, peers) in pools %}
         <div class="pool">
             <h3>Pool {{ address }}</h3>
             <p>Content: {{ hash }}</p>
-            
+            <p>Balance: {{ balance }} wei</p>
+
             <h4>Peers:</h4>
             <table>
                 <thead>
