@@ -56,12 +56,17 @@ document.querySelector('#probe-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const hash = e.target.hash.value;
     const node = e.target.node.value;
+    const address = e.target.address.value;
 
     try {
         const res = await fetch(API.PROBE, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ hash, node })
+            body: JSON.stringify({ 
+                hash, 
+                node,
+                address: address || undefined 
+            })
         });
         const data = await res.json();
 
@@ -70,9 +75,14 @@ document.querySelector('#probe-form')?.addEventListener('submit', async (e) => {
         const resultsDiv = document.getElementById('probe-results');
         resultsDiv.innerHTML = `
             <h3>Probe Results:</h3>
-            <p>Time Elapsed: ${data.stats.elapsed}</p>
-            <p>Bytes Read: ${data.stats.bytes_read}</p>
-            <p>Bytes Written: ${data.stats.bytes_written}</p>
+            <div class="results-box">
+                ${data.stats ? `
+                    <p>Bytes Read: ${data.stats.bytes_read}</p>
+                    <p>Bytes Written: ${data.stats.bytes_written}</p>
+                ` : ''}
+                <p class="message">${data.message}</p>
+                ${data.trust_updated ? '<p class="success">Trust scores updated</p>' : ''}
+            </div>
         `;
         showMessage('probe-message', 'Probe completed successfully');
     } catch (err) {
