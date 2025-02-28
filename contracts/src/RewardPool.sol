@@ -3,9 +3,12 @@ pragma solidity ^0.8.28;
 
 import {ERC20} from "solady/tokens/ERC20.sol";
 import {Ownable} from "solady/auth/Ownable.sol";
+import {IAVS} from "./interface/IAVS.sol";
 
 contract RewardPool is Ownable {
     ERC20 public jaxToken;
+    IAVS public avs;
+
     uint256 public bountyPerEpoch;
     mapping(address => uint256) public balances;
     mapping(address => uint256) public rewards;
@@ -30,6 +33,7 @@ contract RewardPool is Ownable {
 
     function initialize(
         address _jaxToken,
+        address _avs,
         string memory _hash,
         string memory _originatorNodeId
     ) external {
@@ -42,6 +46,7 @@ contract RewardPool is Ownable {
         jaxToken = ERC20(_jaxToken);
         contentHash = _hash;
         originatorNodeId = _originatorNodeId;
+        avs = IAVS(_avs);
     }
 
     // Add modifier for initialization check
@@ -72,6 +77,14 @@ contract RewardPool is Ownable {
 
     function setBountyPerEpoch(uint256 _bounty) external onlyOwner whenInitialized {
         bountyPerEpoch = _bounty;
+    }
+
+    function verifyAgainstAVS(bytes32 data) public view returns (bool) {
+        return avs.verify(data);
+    }
+
+    function getWalletProviders() public view returns (address[] memory) {
+        return avs.getWalletProviders();
     }
 
     function distributeRewards() external whenInitialized {

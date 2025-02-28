@@ -17,7 +17,8 @@ contract FactoryScript is Script {
 
         address poolImplementation = address(new RewardPool());
         address jaxToken = address(new JaxToken(msg.sender));
-        factory = new Factory(poolImplementation, jaxToken);
+        address avs = address(0);
+        factory = new Factory(poolImplementation, jaxToken, avs);
 
         vm.stopBroadcast();
     }
