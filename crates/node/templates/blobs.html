@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>Stored Blobs</h1>
+    
+    {% if blobs.is_empty() %}
+        <p>No blobs stored</p>
+    {% else %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Hash</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for hash in blobs %}
+                <tr>
+                    <td>{{ hash }}</td>
+                    <td>
+                        <button onclick="queryContent('{{ hash }}')" type="button">Query</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+</div>
+{% endblock %} 

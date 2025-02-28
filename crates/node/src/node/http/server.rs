@@ -8,9 +8,11 @@ use tower_http::LatencyUnit;
 use crate::node::State as NodeState;
 
 use super::api;
-use super::error_handlers;
+use super::html;
+// use super::error_handlers;
 use super::health;
 
+const HTML_PREFIX: &str = "/";
 const HEALTH_PREFIX: &str = "/_status";
 const API_PREFIX: &str = "/api/v0";
 
@@ -30,10 +32,11 @@ pub async fn run(
         .on_failure(DefaultOnFailure::new().latency_unit(LatencyUnit::Micros));
 
     let root_router = Router::new()
+        .nest(HTML_PREFIX, html::router(state.clone()))
         .nest(API_PREFIX, api::router(state.clone()))
         .nest(HEALTH_PREFIX, health::router(state.clone()))
         .with_state(state)
-        .fallback(error_handlers::not_found_handler)
+        // .fallback(error_handlers::not_found_handler)
         .layer(trace_layer);
 
     tracing::info!(addr = ?remote_listen_addr, "server listening");

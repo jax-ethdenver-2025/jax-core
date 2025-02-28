@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>Query Content</h1>
+    
+    {% if let Some(msg) = message %}
+        <div class="message">{{ msg }}</div>
+    {% endif %}
+    
+    <form id="query-form" class="form">
+        <div class="form-group">
+            <label for="hash">Content Hash:</label>
+            <input type="text" id="hash" name="hash" required>
+        </div>
+        
+        <button type="submit">Query</button>
+    </form>
+    
+    <div id="query-message"></div>
+    <div id="query-results"></div>
+    
+    {% if let Some(nodes) = nodes %}
+    <div class="results">
+        <h3>Content Locations:</h3>
+        {% if nodes.is_empty() %}
+            <p>No known locations</p>
+        {% else %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Node ID</th>
+                        <th>Trust Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for (node, trust) in nodes %}
+                    <tr>
+                        <td>{{ node }}</td>
+                        <td>{{ trust }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

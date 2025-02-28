@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>Probe Node</h1>
+    
+    {% if let Some(msg) = message %}
+        <div class="message">{{ msg }}</div>
+    {% endif %}
+    
+    <form id="probe-form" class="form">
+        <div class="form-group">
+            <label for="hash">Content Hash:</label>
+            <input type="text" id="hash" name="hash" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="node">Node ID:</label>
+            <input type="text" id="node" name="node" required>
+        </div>
+        
+        <button type="submit">Probe</button>
+    </form>
+    
+    <div id="probe-message"></div>
+    <div id="probe-results"></div>
+    
+    {% if let Some(stats) = stats %}
+    <div class="results">
+        <h3>Probe Results:</h3>
+        <p>Time Elapsed: {{ stats.elapsed }}</p>
+        <p>Bytes Read: {{ stats.bytes_read }}</p>
+        <p>Bytes Written: {{ stats.bytes_written }}</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

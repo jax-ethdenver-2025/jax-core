@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>Node Status</h1>
+    <div class="info-box">
+        <p><strong>Node ID:</strong> {{ node_id }}</p>
+        <p><strong>ETH Address:</strong> {{ eth_address }}</p>
+    </div>
+    
+    <div class="actions">
+        <a href="/blobs" class="button">View Blobs</a>
+        <a href="/pools" class="button">View Pools</a>
+        <a href="/share" class="button">Share Content</a>
+        <a href="/probe" class="button">Probe Node</a>
+        <a href="/query" class="button">Query Content</a>
+    </div>
+</div>
+{% endblock %} 

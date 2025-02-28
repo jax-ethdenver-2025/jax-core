@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>Share Content</h1>
+    
+    {% if let Some(msg) = message %}
+        <div class="message">{{ msg }}</div>
+    {% endif %}
+    
+    <form id="share-form" class="form">
+        <div class="form-group">
+            <label for="path">File Path:</label>
+            <input type="text" id="path" name="path" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="create_pool">
+                <input type="checkbox" id="create_pool" name="create_pool">
+                Create Pool
+            </label>
+        </div>
+        
+        <button type="submit">Share</button>
+    </form>
+    <div id="share-message"></div>
+</div>
+{% endblock %} 
