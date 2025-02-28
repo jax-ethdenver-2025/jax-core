@@ -8,6 +8,12 @@ pub struct MockTrustFetcher {
     mock_connections: HashMap<usize, HashSet<usize>>,
 }
 
+impl Default for MockTrustFetcher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockTrustFetcher {
     pub fn new() -> Self {
         // Add self-trust values to the mock data

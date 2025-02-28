@@ -4,6 +4,7 @@ use http::Method;
 use tower_http::cors::{Any, CorsLayer};
 
 mod create_pool;
+mod deposit;
 mod list;
 mod pools;
 mod probe;
@@ -12,6 +13,7 @@ mod query;
 mod share;
 
 pub use create_pool::handler as create_pool_handler;
+pub use deposit::handler as deposit_handler;
 pub use list::handler as list_handler;
 pub use pools::handler as pools_handler;
 pub use probe::handler as probe_handler;
@@ -36,6 +38,7 @@ pub fn router(state: NodeState) -> Router<NodeState> {
         .route("/pool", routing::post(create_pool_handler))
         .route("/pools", routing::get(pools_handler))
         .route("/pull/:hash", routing::get(pull_handler))
+        .route("/pool/deposit", routing::post(deposit_handler))
         .with_state(state)
         .layer(cors_layer)
 }

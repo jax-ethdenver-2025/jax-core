@@ -20,7 +20,6 @@ pub async fn blobs_handler(State(state): State<NodeState>) -> impl IntoResponse 
         .blobs()
         .await
         .unwrap_or_else(|_| Box::new(std::iter::empty()))
-        .into_iter()
         .filter_map(|r| r.ok())
         .map(|h| h.to_string())
         .collect();

@@ -2,19 +2,40 @@
 
 {% block content %}
 <div class="container">
-    <!-- Add the meta refresh tag directly in the content -->
-    <meta http-equiv="refresh" content="2">
+    <!-- We'll control refresh via JavaScript instead -->
+    <div id="auto-refresh-container"></div>
     
     <h1>Content Pools</h1>
     
     {% if pools.is_empty() %}
         <p>No pools found</p>
     {% else %}
-        {% for (address, hash, peers) in pools %}
+        {% for (address, hash, balance, peers) in pools %}
         <div class="pool">
             <h3>Pool {{ address }}</h3>
             <p>Content: {{ hash }}</p>
-            
+            <p>Balance: {{ balance }} wei</p>
+
+            <!-- Add deposit form -->
+            <div class="deposit-form">
+                <h4>Deposit Funds</h4>
+                <form onsubmit="return handleDeposit(event, '{{ address }}', '{{ hash }}')">
+                    <div class="form-group">
+                        <label for="amount-{{ address }}">Amount (wei):</label>
+                        <input type="number" 
+                               id="amount-{{ address }}" 
+                               min="0" 
+                               max="{{ eth_balance }}"
+                               required
+                               onfocus="pauseRefresh()"
+                               onblur="resumeRefresh()">
+                        <small class="form-text text-muted">Available balance: {{ eth_balance }} wei</small>
+                    </div>
+                    <button type="submit">Deposit</button>
+                </form>
+                <div id="message-{{ address }}" class="message"></div>
+            </div>
+
             <h4>Peers:</h4>
             <table>
                 <thead>
@@ -36,4 +57,73 @@
         {% endfor %}
     {% endif %}
 </div>
+
+<script>
+let refreshInterval;
+let isRefreshPaused = false;
+
+function startRefresh() {
+    refreshInterval = setInterval(() => {
+        if (!isRefreshPaused) {
+            // Only refresh if no form is active
+            const activeElement = document.activeElement;
+            if (!activeElement || !activeElement.form) {
+                window.location.reload();
+            }
+        }
+    }, 5000);
+}
+
+function pauseRefresh() {
+    isRefreshPaused = true;
+}
+
+function resumeRefresh() {
+    isRefreshPaused = false;
+}
+
+// Start the refresh when page loads
+startRefresh();
+
+async function handleDeposit(event, address, hash) {
+    event.preventDefault();
+    const amountInput = document.getElementById(`amount-${address}`);
+    const messageDiv = document.getElementById(`message-${address}`);
+    
+    try {
+        const response = await fetch('/api/v0/pool/deposit', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                address: address,
+                hash: hash,
+                amount: amountInput.value
+            })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error);
+        }
+
+        messageDiv.textContent = data.message;
+        messageDiv.className = 'message success';
+        
+        // Clear input
+        amountInput.value = '';
+        
+        // Resume refresh and force one update
+        resumeRefresh();
+        setTimeout(() => window.location.reload(), 1000);
+    } catch (error) {
+        messageDiv.textContent = error.message;
+        messageDiv.className = 'message error';
+    }
+    
+    return false;
+}
+</script>
 {% endblock %} 

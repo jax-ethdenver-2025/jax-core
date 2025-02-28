@@ -8,21 +8,100 @@
         <div class="message">{{ msg }}</div>
     {% endif %}
     
-    <form id="share-form" class="form">
+    <form id="share-form">
         <div class="form-group">
             <label for="path">File Path:</label>
             <input type="text" id="path" name="path" required>
         </div>
-        
+
         <div class="form-group">
             <label for="create_pool">
                 <input type="checkbox" id="create_pool" name="create_pool">
                 Create Pool
             </label>
         </div>
-        
+       
+        <!-- TODO: fix contract call to initialize pool -->
+        <!-- <div class="form-group pool-options" style="display: none;">
+            <label for="value">Initial Pool Value</label>
+            <input type="number" 
+                   id="value" 
+                   name="value" 
+                   min="0" 
+                   max="{{ eth_balance }}"
+                   placeholder="Enter initial pool value">
+            <small class="form-text text-muted">Available balance: {{ eth_balance }} wei</small>
+        </div> -->
+
         <button type="submit">Share</button>
     </form>
     <div id="share-message"></div>
 </div>
+
+<script>
+// Helper to show messages
+function _showMessage(message, isError = false) {
+    const el = document.getElementById('share-message');
+    el.textContent = message;
+    el.className = `message ${isError ? 'error' : 'success'}`;
+}
+
+// Toggle pool options visibility
+// document.getElementById('create_pool').addEventListener('change', (e) => {
+//     const poolOptions = document.querySelector('.pool-options');
+//     poolOptions.style.display = e.target.checked ? 'block' : 'none';
+    
+//     // Clear value when hiding
+//     if (!e.target.checked) {
+//         document.getElementById('value').value = '';
+//     }
+// });
+
+document.getElementById('share-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const path = e.target.path.value;
+    const createPool = e.target.create_pool.checked;
+    // const value = e.target.value.value;
+
+    try {
+        // Share the file
+        const shareRes = await fetch('/api/v0/share', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ path })
+        });
+        const shareData = await shareRes.json();
+
+        if (!shareRes.ok) throw new Error(shareData.error);
+
+        let message = `File shared successfully!\nHash: ${shareData.hash}`;
+
+        // Create pool if requested
+        if (createPool) {
+            // if (!value) {
+            //     throw new Error('Pool value is required when creating a pool');
+            // }
+
+            const poolRes = await fetch('/api/v0/pool', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ 
+                    hash: shareData.hash,
+                    // TODO: fix this
+                    // initial_value: parseInt(value)
+                    initial_value: 0
+                })
+            });
+            const poolData = await poolRes.json();
+
+            if (!poolRes.ok) throw new Error(poolData.error);
+            message += '\nPool created successfully!';
+        }
+
+        _showMessage(message);
+    } catch (err) {
+        _showMessage(err.message, true);
+    }
+});
+</script>
 {% endblock %} 

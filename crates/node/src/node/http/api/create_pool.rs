@@ -1,3 +1,4 @@
+use alloy::primitives::U256;
 use axum::extract::{Json, State};
 use axum::response::{IntoResponse, Response};
 use iroh_blobs::Hash;
@@ -8,7 +9,7 @@ use crate::node::State as NodeState;
 #[derive(Deserialize)]
 pub struct CreatePoolRequest {
     hash: Hash,
-    value: Option<u64>,
+    value: Option<U256>,
 }
 
 #[derive(Serialize)]
@@ -27,7 +28,7 @@ pub async fn handler(
 
     // TODO: return the pool address and owner address
     // Create a pool using the tracker
-    let _ = state
+    state
         .tracker()
         .create_pool(hash, value)
         .await
