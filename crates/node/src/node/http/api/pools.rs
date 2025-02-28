@@ -30,8 +30,6 @@ pub async fn handler(
         message: format!("Successfully retrieved {} pools", pools_vec.len()),
     };
 
-    tracing::info!("Pools: {:?}", pools_vec);
-
     Ok((axum::http::StatusCode::OK, Json(response)))
 }
 

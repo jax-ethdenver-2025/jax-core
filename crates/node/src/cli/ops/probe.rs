@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 use async_trait::async_trait;
 use iroh::NodeId;
@@ -13,10 +13,10 @@ use super::api_client::{api_requests, ApiClient, ApiError};
 pub struct Probe {
     /// The hash to probe
     #[clap(long)]
-    hash: Hash,
+    hash: String,
     /// The node to probe
     #[clap(short, long)]
-    node: NodeId,
+    node: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -50,19 +50,21 @@ impl Op for Probe {
     type Output = ProbeOutput;
 
     async fn execute(&self) -> Result<Self::Output, Self::Error> {
+        let hash = Hash::from_str(&self.hash).expect("Invalid hash");
+        let node = NodeId::from_str(&self.node).expect("Invalid node");
         let config = Config::from_env_or_disk()?;
+
         let client = ApiClient::new(config.remote_url().as_ref())?;
 
         let request = api_requests::Probe { 
-            hash: self.hash,
-            node: self.node,
+            hash,
+            node,
         };
 
         let response = client.call(request).await?;
-
         Ok(ProbeOutput {
-            hash: self.hash,
-            node: self.node,
+            hash,
+            node,
             stats: response.stats,
         })
     }

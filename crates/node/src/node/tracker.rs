@@ -369,8 +369,13 @@ impl Tracker {
             hash: ticket.hash(),
             format: ticket.format(),
         };
-        let stats = probe_complete(&ephemeral_endpoint, &ticket.node_addr().node_id, &hash_and_format).await?;
-        Ok(stats)
+        
+        // Add a timeout of 10 seconds
+        let probe_future = probe_complete(&ephemeral_endpoint, &ticket.node_addr().node_id, &hash_and_format);
+        match tokio::time::timeout(std::time::Duration::from_secs(2), probe_future).await {
+            Ok(result) => result,
+            Err(_) => Err(anyhow::anyhow!("Probe timed out after 10 seconds"))
+        }
     }
 
     /// Record successful download from a peer in a specific pool
@@ -415,7 +420,25 @@ impl Tracker {
         Ok(result)
     }
 
-    // Add this helper function to probe and update trust
+    // Modify the update_local_trust method to be more aggressive with failures
+    pub async fn update_local_trust(&self, key: PoolKey, node_id: NodeId, success: bool) -> Result<()> {
+        if let Some(eigen) = self.pool_trust.write().await.get_mut(&key) {
+            // Update trust fetcher interactions
+            if let Some(fetcher) = eigen.get_fetcher_mut() {
+                fetcher.record_interaction(self.current_node_id, node_id, success).await;
+            }
+            
+            // Make trust changes more dramatic
+            // Success = high trust (1.0)
+            // Failure = very low trust (0.0)
+            // Increase weight to 0.5 for faster trust changes
+            let trust_value = if success { 1.0 } else { 0.0 };
+            eigen.update_local_trust(node_id, trust_value, 0.5); // Increased weight from 0.1 to 0.5
+        }
+        Ok(())
+    }
+
+    // Modify probe_and_update_trust to be stricter about timeouts
     pub async fn probe_and_update_trust(&self, key: PoolKey, node_id: NodeId) -> Result<ProbeResult> {
         let ticket = BlobTicket::new(
             node_id.into(),
@@ -423,9 +446,11 @@ impl Tracker {
             iroh_blobs::BlobFormat::Raw
         ).expect("valid ticket");
 
+        // Reduce timeout threshold to 2 seconds
         let probe_result = match Self::probe_node(ticket).await {
             Ok(stats) => {
-                if stats.elapsed.as_millis() <  5000 {
+                // More aggressive timeout threshold - now 2 seconds instead of 10
+                if stats.elapsed.as_millis() < 2000 {
                     ProbeResult::Success(stats)
                 } else {
                     ProbeResult::Timeout(stats.elapsed)
@@ -435,8 +460,21 @@ impl Tracker {
         };
 
         // Update trust based on probe result
-        let success = matches!(probe_result, ProbeResult::Success(_)) || node_id == self.current_node_id;
-        self.update_local_trust(key, node_id, success).await?;
+        let success = matches!(probe_result, ProbeResult::Success(_));
+        
+        // For timeouts and errors, update trust as a failure
+        if !success {
+            // Call update_local_trust with failure
+            self.update_local_trust(key.clone(), node_id, false).await?;
+            
+            // Additional penalty for complete failures (errors)
+            if matches!(probe_result, ProbeResult::Error(_)) {
+                // Apply an extra penalty by updating trust again
+                self.update_local_trust(key, node_id, false).await?;
+            }
+        } else {
+            self.update_local_trust(key, node_id, true).await?;
+        }
 
         Ok(probe_result)
     }
@@ -461,31 +499,21 @@ impl Tracker {
         Ok(combined_trust)
     }
 
-    // Add this new method
-    pub async fn update_local_trust(&self, key: PoolKey, node_id: NodeId, success: bool) -> Result<()> {
-        if let Some(eigen) = self.pool_trust.write().await.get_mut(&key) {
-            // Update trust fetcher interactions
-            if let Some(fetcher) = eigen.get_fetcher_mut() {
-                fetcher.record_interaction(self.current_node_id, node_id, success).await;
-            }
-            
-            // Update local trust score
-            // Success = high trust (1.0), failure = low trust (0.0)
-            // Weight of 0.1 means the trust score changes gradually
-            let trust_value = if success { 1.0 } else { 0.0 };
-            eigen.update_local_trust(node_id, trust_value, 0.1);
-        }
-        Ok(())
-    }
-
     // Add this method to probe all nodes in a pool
     pub async fn probe_pool(&self, key: PoolKey) -> Result<Vec<(NodeId, ProbeResult)>> {
+        tracing::info!("Probing pool {}", key.address);
         let mut results = Vec::new();
         let peers = self.get_pool_peers(key.clone()).await?;
+
+        tracing::info!("Pool {} has {} peers", key.address, peers.len());
         
         for node_id in peers {
+            tracing::info!("Probing node {}", node_id);
             match self.probe_and_update_trust(key.clone(), node_id).await {
-                Ok(probe_result) => results.push((node_id, probe_result)),
+                Ok(probe_result) => {
+                    tracing::info!("Probed node {} with result {:?}", node_id, probe_result);
+                    results.push((node_id, probe_result));
+                }
                 Err(e) => {
                     tracing::warn!("Failed to probe node {}: {}", node_id, e);
                     self.update_local_trust(key.clone(), node_id, false).await?;
@@ -542,7 +570,7 @@ impl Tracker {
         
         // Spawn background task
         tokio::spawn(async move {
-            let update_interval = tokio::time::Duration::from_secs(30); // Increased from 10s
+            let update_interval = tokio::time::Duration::from_secs(10); // Increased from 10s
             let mut interval = tokio::time::interval(update_interval);
 
             loop {
@@ -568,13 +596,28 @@ impl Tracker {
         let mut updated_count = 0;
         
         for pool_key in pools {
-            // Don't skip pools we're not in - we might want to join them
             match self.probe_pool(pool_key.clone()).await {
                 Ok(results) => {
+                    let mut responsive_peers = 0;
+                    let total_peers = results.len();
+
+                    for (node_id, result) in &results {
+                        match result {
+                            ProbeResult::Success(_) => {
+                                responsive_peers += 1;
+                            }
+                            ProbeResult::Timeout(_) | ProbeResult::Error(_) => {
+                                // Apply extra penalty for unresponsive peers
+                                self.update_local_trust(pool_key.clone(), *node_id, false).await?;
+                            }
+                        }
+                    }
+
                     tracing::info!(
-                        "Updated pool {} with {} peers", 
+                        "Updated pool {} with {}/{} responsive peers", 
                         pool_key.address,
-                        results.len()
+                        responsive_peers,
+                        total_peers
                     );
                     updated_count += 1;
 

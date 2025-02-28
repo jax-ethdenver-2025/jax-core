@@ -15,5 +15,5 @@ pub use node::Node;
 pub use query::{Query, QueryError, QueryOutput};
 pub use share::{Share, ShareError};
 pub use status::Status; 
-pub use probe::{Probe, ProbeError, ProbeOutput};
+pub use probe::Probe;
 pub use pools::{Pools, PoolsError, PoolsOutput};
