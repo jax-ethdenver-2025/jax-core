@@ -33,11 +33,10 @@ contract Factory {
 
     /* Public Functions */
 
-    // TODO: add signature verification
     function createPool(
         string memory hash
-    ) external returns (address poolAddress) {
-        poolAddress = _create(hash);
+    ) external payable returns (address poolAddress) {
+        poolAddress = _create(hash, msg.value);
         
         // Track the new pool
         pools.push(poolAddress);
@@ -47,12 +46,13 @@ contract Factory {
     }
 
     function _create(
-        string memory hash
+        string memory hash,
+        uint256 value
     ) internal returns (address poolAddress) {
         bytes32 salt = keccak256(abi.encodePacked(poolNonce));
         poolNonce++;
 
         poolAddress = LibClone.cloneDeterministic(poolImplementation, salt);
-        RewardPool(poolAddress).initialize(avs, hash);
+        RewardPool(poolAddress).initialize{value: value}(avs, hash);
     }
 }

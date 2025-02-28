@@ -23,4 +23,4 @@ impl ApiRequest for List {
         let url = base_url.join("api/v0/list").expect("valid URL");
         client.get(url)
     }
-} 
+}

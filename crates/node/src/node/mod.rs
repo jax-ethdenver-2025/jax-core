@@ -18,8 +18,8 @@ mod tracker;
 mod utils;
 
 use http::http_server;
-use iroh::router as iroh_router;
 pub use iroh::create_ephemeral_endpoint;
+use iroh::router as iroh_router;
 pub use state::State;
 
 pub struct Node;

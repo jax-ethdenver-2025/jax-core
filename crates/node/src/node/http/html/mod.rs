@@ -1,7 +1,4 @@
-use axum::{
-    routing::get,
-    Router,
-};
+use axum::{routing::get, Router};
 use tower_http::services::ServeDir;
 
 use crate::node::State as NodeState;
@@ -19,4 +16,4 @@ pub fn router(state: NodeState) -> Router<NodeState> {
         .with_state(state)
         // TODO: make this configurable
         .nest_service("/static", ServeDir::new("crates/node/static"))
-} 
+}

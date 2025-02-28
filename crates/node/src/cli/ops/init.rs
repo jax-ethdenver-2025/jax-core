@@ -34,7 +34,13 @@ impl Op for Init {
     type Output = (NodeId, Address);
 
     async fn execute(&self) -> Result<Self::Output, Self::Error> {
-        OnDiskConfig::init(self.overwrite, self.factory_address, self.eth_signer.clone(), self.http_port, self.iroh_port)?;
+        OnDiskConfig::init(
+            self.overwrite,
+            self.factory_address,
+            self.eth_signer.clone(),
+            self.http_port,
+            self.iroh_port,
+        )?;
         let config = Config::from_env_or_disk()?;
         let key = config.iroh_secret_key()?;
         let node_id = key.public();

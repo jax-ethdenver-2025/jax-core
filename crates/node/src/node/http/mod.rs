@@ -1,7 +1,7 @@
 mod api;
-mod error_handlers;
+// mod error_handlers;
 mod health;
-mod server;
 mod html;
+mod server;
 
 pub use server::run as http_server;

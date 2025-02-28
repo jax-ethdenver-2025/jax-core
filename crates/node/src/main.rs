@@ -3,7 +3,6 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
-
 mod cli;
 
 use cli::{Args, Op, Parser};

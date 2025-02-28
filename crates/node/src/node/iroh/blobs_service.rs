@@ -1,11 +1,7 @@
 use anyhow::Result;
 use iroh::Endpoint;
-use iroh_blobs::{
-    net_protocol::Blobs, 
-    store::fs::Store, 
-    Hash, 
-    ticket::BlobTicket,
-};
+use iroh_blobs::rpc::client::blobs::BlobStatus;
+use iroh_blobs::{net_protocol::Blobs, store::fs::Store, ticket::BlobTicket, Hash};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -31,6 +27,12 @@ impl BlobsService {
         Ok(hash)
     }
 
+    /// Get the stat of a blob
+    pub async fn get_blob_stat(&self, hash: Hash) -> Result<bool> {
+        let stat = self.blobs.client().status(hash).await?;
+        Ok(matches!(stat, BlobStatus::Complete { .. }))
+    }
+
     // TODO: get ticket
 
     /// Get the underlying Blobs instance
@@ -40,8 +42,9 @@ impl BlobsService {
 
     /// Get a blob using a ticket
     pub async fn download_blob(&self, ticket: &BlobTicket) -> Result<()> {
-        self.blobs.client()
-            .download(ticket.hash(), ticket.node_addr().clone() )
+        self.blobs
+            .client()
+            .download(ticket.hash(), ticket.node_addr().clone())
             .await?
             .finish()
             .await?;

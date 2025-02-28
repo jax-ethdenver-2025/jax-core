@@ -6,7 +6,7 @@ use iroh_blobs::get::Stats;
 use iroh_blobs::Hash;
 use serde::{Deserialize, Serialize};
 
-use crate::node::tracker::{Tracker, PoolKey, ProbeResult};
+use crate::node::tracker::{PoolKey, ProbeResult, Tracker};
 use crate::node::State as NodeState;
 
 #[derive(Deserialize)]
@@ -33,39 +33,55 @@ pub async fn handler(
             hash: request.hash,
             address,
         };
-        
-        match state.tracker().probe_and_update_trust(key, request.node).await? {
-            ProbeResult::Success(stats) => Ok((axum::http::StatusCode::OK, Json(ProbeResponse {
-                stats: Some(stats),
-                trust_updated: true,
-                message: "Successfully probed node and updated trust".to_string(),
-            }))),
-            ProbeResult::Timeout(duration) => Ok((axum::http::StatusCode::OK, Json(ProbeResponse {
-                stats: None,
-                trust_updated: false,
-                message: format!("Probe timed out after {:?}", duration),
-            }))),
-            ProbeResult::Error(e) => Ok((axum::http::StatusCode::OK, Json(ProbeResponse {
-                stats: None,
-                trust_updated: false,
-                message: format!("Probe failed: {}", e),
-            }))),
+
+        match state
+            .tracker()
+            .probe_and_update_trust(key, request.node)
+            .await?
+        {
+            ProbeResult::Success(stats) => Ok((
+                axum::http::StatusCode::OK,
+                Json(ProbeResponse {
+                    stats: Some(stats),
+                    trust_updated: true,
+                    message: "Successfully probed node and updated trust".to_string(),
+                }),
+            )),
+            ProbeResult::Timeout(duration) => Ok((
+                axum::http::StatusCode::OK,
+                Json(ProbeResponse {
+                    stats: None,
+                    trust_updated: false,
+                    message: format!("Probe timed out after {:?}", duration),
+                }),
+            )),
+            ProbeResult::Error(e) => Ok((
+                axum::http::StatusCode::OK,
+                Json(ProbeResponse {
+                    stats: None,
+                    trust_updated: false,
+                    message: format!("Probe failed: {}", e),
+                }),
+            )),
         }
     } else {
         // Fall back to basic probe_node if no pool address
         let ticket = iroh_blobs::ticket::BlobTicket::new(
             request.node.into(),
             request.hash,
-            iroh_blobs::BlobFormat::Raw
+            iroh_blobs::BlobFormat::Raw,
         )?;
 
         let stats = Tracker::probe_node(ticket).await?;
-        
-        Ok((axum::http::StatusCode::OK, Json(ProbeResponse {
-            stats: Some(stats),
-            trust_updated: false,
-            message: "Successfully probed node".to_string(),
-        })))
+
+        Ok((
+            axum::http::StatusCode::OK,
+            Json(ProbeResponse {
+                stats: Some(stats),
+                trust_updated: false,
+                message: "Successfully probed node".to_string(),
+            }),
+        ))
     }
 }
 

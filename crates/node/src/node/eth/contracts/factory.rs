@@ -3,9 +3,8 @@ use std::sync::Arc;
 use alloy::{
     eips::BlockNumberOrTag,
     network::EthereumWallet,
-    primitives::{Address, Log},
-    providers::ProviderBuilder,
-    providers::{Provider, WsConnect},
+    primitives::{Address, Log, U256},
+    providers::{Provider, ProviderBuilder, WsConnect},
     rpc::types::Filter,
     signers::local::PrivateKeySigner,
     sol,
@@ -13,23 +12,18 @@ use alloy::{
 };
 use anyhow::Result;
 use futures_util::StreamExt;
-use tokio::sync::{Mutex, watch, mpsc};
-use url::Url;
 use iroh_blobs::Hash;
-use iroh::NodeId;
+use tokio::sync::{mpsc, watch, Mutex};
+use url::Url;
 
 // Define event for internal communication
 #[derive(Debug, Clone)]
 pub enum FactoryEvent {
-    PoolCreated {
-        pool_address: Address,
-        hash: String,
-        node_id: String,
-    }
+    PoolCreated { pool_address: Address, hash: String },
 }
 
 sol!(
-    event PoolCreated(address indexed poolAddress, string hash, string nodeId);
+    event PoolCreated(address indexed poolAddress, string hash);
 );
 
 sol!(
@@ -63,7 +57,7 @@ impl FactoryContract {
                 .on_ws(ws)
                 .await?,
         );
-        
+
         Ok(Self {
             address: address.clone(),
             ws_url: ws_url.clone(),
@@ -94,13 +88,11 @@ impl FactoryContract {
                         if let Ok(event) = PoolCreated::decode_log(&primitive_log, true) {
                             let pool_address = event.poolAddress;
                             let hash = event.hash.clone();
-                            let node_id = event.nodeId.clone();
-                            
+
                             // Send event to tracker
                             let _ = event_sender.send(FactoryEvent::PoolCreated {
                                 pool_address,
                                 hash,
-                                node_id,
                             }).await;
                         }
                     }
@@ -129,7 +121,7 @@ impl FactoryContract {
         Ok(pools)
     }
 
-    pub async fn create_pool(&self, hash: Hash, node_id: NodeId) -> Result<()> {
+    pub async fn create_pool(&self, hash: Hash, value: Option<u64>) -> Result<()> {
         let provider = ProviderBuilder::new()
             .with_chain(alloy_chains::NamedChain::AnvilHardhat)
             .wallet(EthereumWallet::from(self.private_key.clone()))
@@ -137,8 +129,19 @@ impl FactoryContract {
             .await?;
 
         let factory = Factory::new(self.address, provider);
-        let tx = factory.createPool(hash.to_string(), node_id.to_string()).send().await?;
-        let _receipt = tx.watch().await?;
-        Ok(())
+        let u256_value = value.map(|v| U256::from(v)).unwrap_or(U256::ZERO);
+        if u256_value > U256::ZERO {
+            let tx = factory
+                .createPool(hash.to_string())
+                .value(u256_value)
+                .send()
+                .await?;
+            let _receipt = tx.watch().await?;
+            Ok(())
+        } else {
+            let tx = factory.createPool(hash.to_string()).send().await?;
+            let _receipt = tx.watch().await?;
+            Ok(())
+        }
     }
 }

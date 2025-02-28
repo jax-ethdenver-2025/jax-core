@@ -1,18 +1,18 @@
+mod create_pool;
 mod health;
 mod list;
-mod share;
-mod query;
-mod create_pool;
-mod probe;
 mod pools;
+mod probe;
+mod query;
+mod share;
 
-pub use health::{Liveness, Readiness};
 pub use create_pool::{CreatePool, CreatePoolResponse};
+pub use health::{Liveness, Readiness};
 pub use list::{List, ListResponse};
-pub use share::Share;
-pub use query::Query;
-pub use probe::{Probe, ProbeStats};
 pub use pools::{Pools, PoolsResponse};
+pub use probe::{Probe, ProbeStats};
+pub use query::Query;
+pub use share::Share;
 
 use reqwest::{Client, RequestBuilder, Url};
 use serde::de::DeserializeOwned;

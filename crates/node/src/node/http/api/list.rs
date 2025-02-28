@@ -16,16 +16,11 @@ pub struct ListBlobsResponse {
     blobs: Vec<BlobInfo>,
 }
 
-pub async fn handler(
-    State(state): State<NodeState>,
-) -> Result<impl IntoResponse, ListBlobsError> {
+pub async fn handler(State(state): State<NodeState>) -> Result<impl IntoResponse, ListBlobsError> {
     // Get blobs from state
     let blobs = state.blobs_service().get_inner_blobs();
 
-    let blob_list = blobs
-        .store()
-        .blobs()
-        .await?;
+    let blob_list = blobs.store().blobs().await?;
 
     // Convert to response format
     let blob_infos = blob_list

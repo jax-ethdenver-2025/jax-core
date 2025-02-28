@@ -19,11 +19,10 @@ contract RewardPool is Ownable {
     uint256 public bountyPerEpoch;
     mapping(address => uint256) public balances;
     mapping(address => uint256) public rewards;
-    
+
     // Add storage for pool metadata
     string public contentHash;
-    string public originatorNodeId;
-    
+
     // Storage for historical peers
     mapping(string => bool) public peers;
     string[] public peerList;
@@ -38,16 +37,17 @@ contract RewardPool is Ownable {
 
     constructor() {}
 
-    function initialize(
-        address _avs,
-        string memory _hash
-    ) external {
+    function initialize(address _avs, string memory _hash) external payable {
+        require(msg.value > 0, "Invalid amount");
         require(!initialized, "Already initialized");
         require(bytes(_hash).length > 0, "Invalid hash");
-        
+
         initialized = true;
         contentHash = _hash;
         avs = IAVS(_avs);
+
+        balances[msg.sender] += msg.value;
+        emit Deposit(msg.sender, msg.value);
     }
 
     // Add modifier for initialization check
@@ -67,6 +67,10 @@ contract RewardPool is Ownable {
 
     function getAllPeers() external view returns (string[] memory) {
         return peerList;
+    }
+
+    function getHash() external view returns (string memory) {
+        return contentHash;
     }
 
     function deposit() external payable whenInitialized {

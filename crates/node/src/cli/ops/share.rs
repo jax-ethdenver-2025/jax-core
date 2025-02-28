@@ -1,7 +1,7 @@
 use async_trait::async_trait;
-use std::path::PathBuf;
-use iroh_blobs::Hash;
 use iroh::NodeId;
+use iroh_blobs::Hash;
+use std::path::PathBuf;
 
 use jax::config::{Config, ConfigError};
 
@@ -13,7 +13,7 @@ pub struct Share {
     /// Path to the file to share
     #[arg(short, long)]
     pub path: PathBuf,
-    
+
     /// Create a pool for this content
     #[arg(short, long)]
     pub create_pool: bool,
@@ -48,26 +48,23 @@ impl AppOp for Share {
 
         // Call the API endpoint to share the file
         let response = client.call(request).await?;
-        
+
         let mut output = format!(
             "{}\nShare ticket: {}\nHash: {}",
             response.message, response.ticket, response.hash
         );
-        
+
         // If create_pool flag is set, create a pool for this content
         if self.create_pool {
             // Create pool request
             let create_pool_request = api_requests::CreatePool {
                 hash: response.hash.clone(),
             };
-            
+
             // Call the API endpoint to create a pool
             let pool_response = client.call(create_pool_request).await?;
-            
-            output.push_str(&format!(
-                "\n\nPool created: {}",
-                pool_response.success
-            ));
+
+            output.push_str(&format!("\n\nPool created: {}", pool_response.success));
         }
 
         Ok(output)

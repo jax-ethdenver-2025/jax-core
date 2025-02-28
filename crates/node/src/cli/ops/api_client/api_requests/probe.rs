@@ -32,4 +32,4 @@ impl ApiRequest for Probe {
         let url = base_url.join("api/v0/probe").expect("Failed to join URL");
         client.post(url).json(&self)
     }
-} 
+}

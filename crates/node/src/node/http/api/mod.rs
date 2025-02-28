@@ -3,19 +3,19 @@ use http::header::{ACCEPT, ORIGIN};
 use http::Method;
 use tower_http::cors::{Any, CorsLayer};
 
+mod create_pool;
 mod list;
-mod share;
+mod pools;
 mod probe;
 mod query;
-mod create_pool;
-mod pools;
+mod share;
 
+pub use create_pool::handler as create_pool_handler;
 pub use list::handler as list_handler;
-pub use share::handler as share_handler;
+pub use pools::handler as pools_handler;
 pub use probe::handler as probe_handler;
 pub use query::handler as query_handler;
-pub use create_pool::handler as create_pool_handler;
-pub use pools::handler as pools_handler;
+pub use share::handler as share_handler;
 
 use crate::node::State as NodeState;
 

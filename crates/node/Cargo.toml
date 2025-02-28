@@ -79,3 +79,4 @@ alloy = { version = "0.11", features = [
 ] }
 futures-util = "0.3.31"
 alloy-chains = "0.1.63"
+ed25519 = "2.2.3"
