@@ -28,7 +28,7 @@ pub async fn handler(
 
     // TODO: return the pool address and owner address
     // Create a pool using the tracker
-    let _ = state
+    state
         .tracker()
         .create_pool(hash, value)
         .await

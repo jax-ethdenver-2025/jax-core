@@ -28,7 +28,7 @@ pub async fn handler(
         .blobs_service()
         .get_inner_blobs()
         .client()
-        .status(hash.clone())
+        .status(hash)
         .await?;
     let local = matches!(blob_status, BlobStatus::Complete { .. });
 

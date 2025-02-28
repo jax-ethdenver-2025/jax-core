@@ -82,8 +82,8 @@ impl State {
         let node_id = self.iroh_node_id();
         let secret_key = &self.iroh_secret_key;
         let node_id_bytes = node_id.as_bytes();
-        let signature = secret_key.sign(node_id_bytes);
-        signature
+        
+        secret_key.sign(node_id_bytes)
     }
 
     pub fn iroh_node_id(&self) -> NodeId {

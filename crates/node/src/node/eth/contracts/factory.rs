@@ -63,7 +63,7 @@ impl FactoryContract {
         );
 
         Ok(Self {
-            address: address.clone(),
+            address: *address,
             ws_url: ws_url.clone(),
             private_key: private_key.clone(),
             provider: Arc::new(Mutex::new(provider)),
@@ -91,7 +91,7 @@ impl FactoryContract {
                                 let primitive_log = Log::from(log);
                                 if let Ok(event) = PoolCreated::decode_log(&primitive_log, true) {
                                     let pool_address = event.poolAddress;
-                                    let hash_fixed_bytes = event.hash.clone();
+                                    let hash_fixed_bytes = event.hash;
                                     let hash_vec = hash_fixed_bytes.as_slice().to_vec();
                 let mut hash_bytes = [0u8; 32];
                 hash_bytes.copy_from_slice(hash_vec.as_slice());

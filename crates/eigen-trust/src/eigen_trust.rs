@@ -46,7 +46,7 @@ where
 
     pub fn add_pre_trusted(&mut self, peer_id: F::NodeId, value: f64) -> &mut Self {
         assert!(value >= 0.0, "Trust values must be non-negative");
-        self.pre_trusted.insert(peer_id.clone(), value);
+        self.pre_trusted.insert(peer_id, value);
         self.add_peer(peer_id);
         self
     }
@@ -66,7 +66,7 @@ where
     pub fn update_local_trust(&mut self, j: F::NodeId, new_value: f64, weight: f64) -> &mut Self {
         assert!(new_value >= 0.0, "Trust values must be non-negative");
         assert!(
-            weight >= 0.0 && weight <= 1.0,
+            (0.0..=1.0).contains(&weight),
             "Weight must be between 0 and 1"
         );
 
@@ -118,12 +118,12 @@ where
                     continue;
                 }
 
-                explored.insert(peer_id.clone());
+                explored.insert(peer_id);
 
                 match self.trust_fetcher.discover_peers(&peer_id).await {
                     Ok(discovered) => {
                         for new_peer in discovered {
-                            self.add_peer(new_peer.clone());
+                            self.add_peer(new_peer);
                             if !explored.contains(&new_peer) {
                                 to_explore.push(new_peer);
                             }
@@ -146,12 +146,12 @@ where
             return Ok(0.0);
         }
 
-        if let Some(&value) = self.trust_cache.get(&(i.clone(), j.clone())) {
+        if let Some(&value) = self.trust_cache.get(&(*i, *j)) {
             return Ok(value);
         }
 
         let value = self.trust_fetcher.fetch_trust(i, j).await?;
-        self.trust_cache.insert((i.clone(), j.clone()), value);
+        self.trust_cache.insert((*i, *j), value);
         Ok(value)
     }
 
@@ -175,12 +175,12 @@ where
             if sum > 0.0 {
                 for j in &peers_vec {
                     let trust = self.get_trust(i, j).await?;
-                    c.insert((i.clone(), j.clone()), trust / sum);
+                    c.insert((*i, *j), trust / sum);
                 }
             } else {
                 let uniform_trust = 1.0 / peers_vec.len() as f64;
                 for j in &peers_vec {
-                    c.insert((i.clone(), j.clone()), uniform_trust);
+                    c.insert((*i, *j), uniform_trust);
                 }
             }
         }
@@ -199,13 +199,13 @@ where
         let peer_to_index: HashMap<F::NodeId, usize> = peers_vec
             .iter()
             .enumerate()
-            .map(|(idx, peer_id)| (peer_id.clone(), idx))
+            .map(|(idx, peer_id)| (*peer_id, idx))
             .collect();
 
         let index_to_peer: HashMap<usize, F::NodeId> = peers_vec
             .iter()
             .enumerate()
-            .map(|(idx, peer_id)| (idx, peer_id.clone()))
+            .map(|(idx, peer_id)| (idx, *peer_id))
             .collect();
 
         let mut t = vec![0.0; n];

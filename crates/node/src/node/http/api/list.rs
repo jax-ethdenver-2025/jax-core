@@ -50,7 +50,7 @@ impl IntoResponse for ListBlobsError {
         let (status, error_message) = match self {
             ListBlobsError::Default(_) | ListBlobsError::Io(_) => (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                format!("internal server error"),
+                "internal server error".to_string(),
             ),
         };
 

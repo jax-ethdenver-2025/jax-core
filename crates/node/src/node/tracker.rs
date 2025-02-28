@@ -264,19 +264,19 @@ impl Tracker {
         let factory = self.factory_contract.read().await;
         // TODO (amiller68): for some reason this seemed to be returning the
         //  wrong address -- we should be updating our local knowledge of pools here
-        let _pool_address = factory.create_pool(hash, value).await?;
+        factory.create_pool(hash, value).await?;
         // tracing::info!("Pool created at {}", pool_address);
         // self.add_pool(PoolKey { hash, address: pool_address }).await?;
         Ok(())
     }
 
-    pub async fn set_pool_balance(&self, key: PoolKey, amount: U256) -> () {
+    pub async fn set_pool_balance(&self, key: PoolKey, amount: U256) {
         let mut pools = self.pools.write().await;
         pools.insert(key, amount);
-        ()
+        
     }
 
-    pub async fn add_pool_deposit(&self, key: PoolKey, amount: U256) -> () {
+    pub async fn add_pool_deposit(&self, key: PoolKey, amount: U256) {
         let mut pools = self.pools.write().await;
         let value = pools.get(&key).copied();
         if let Some(value) = value {
@@ -284,7 +284,7 @@ impl Tracker {
         } else {
             tracing::warn!("node::tracker::: attempted to up deposit state of non-extant pool");
         }
-        ()
+        
     }
 
     /// NOTE (amiller68): this is a janky place to put this, but it's convenient
@@ -661,7 +661,7 @@ impl Tracker {
             };
             pool_info.push(pi.clone());
             let pk = pi.key();
-            if !self.pools.read().await.contains_key(&pk) {
+            if !self.pools.read().await.contains_key(pk) {
                 self.add_pool(pk.clone(), balance).await?;
             } else {
                 // update the pool balance
@@ -682,7 +682,7 @@ impl Tracker {
             let new_peers = set.difference(&peers_set);
             // add the new peers
             for peer in new_peers {
-                self.add_pool_peer(pool_key.clone(), peer.clone()).await;
+                self.add_pool_peer(pool_key.clone(), *peer).await;
             }
 
             if !peers_set.contains(&self.current_node_id) {
@@ -733,7 +733,7 @@ impl Tracker {
                 );
             }
             // this both probes and updates trust
-            let _probes = self.probe_pool(pool_key.clone()).await?;
+            self.probe_pool(pool_key.clone()).await?;
         }
 
         Ok(())
@@ -770,7 +770,7 @@ impl Tracker {
             let ticket = BlobTicket::new(peer.into(), hash, iroh_blobs::BlobFormat::Raw)
                 .expect("valid ticket");
 
-            let _stats = self.blobs_service.download_blob(&ticket).await?;
+            self.blobs_service.download_blob(&ticket).await?;
         }
         Ok(())
     }

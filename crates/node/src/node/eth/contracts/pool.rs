@@ -101,7 +101,7 @@ impl PoolContract {
             private_key: private_key.clone(),
             provider: Arc::new(Mutex::new(provider)),
             tracker: tracker.clone(),
-            iroh_signature: tracker.iroh_signature.clone(),
+            iroh_signature: tracker.iroh_signature,
         })
     }
 
@@ -176,8 +176,8 @@ impl PoolContract {
             .on_ws(WsConnect::new(self.ws_url.as_str()))
             .await?;
         let contract = RewardPool::new(self.address, provider);
-        let iroh_signature = self.iroh_signature.clone();
-        let node_id = self.tracker.current_node_id.clone();
+        let iroh_signature = self.iroh_signature;
+        let node_id = self.tracker.current_node_id;
         let k_bytes = self.tracker.current_node_id.as_bytes();
         let r_bytes = iroh_signature.r_bytes();
         let s_bytes = iroh_signature.s_bytes();
