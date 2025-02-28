@@ -128,20 +128,16 @@ impl FactoryContract {
             .on_builtin(self.ws_url.as_str())
             .await?;
 
+        let address: Address = self.private_key.address();
         let factory = Factory::new(self.address, provider);
         let u256_value = value.map(|v| U256::from(v)).unwrap_or(U256::ZERO);
-        if u256_value > U256::ZERO {
-            let tx = factory
-                .createPool(hash.to_string())
-                .value(u256_value)
-                .send()
-                .await?;
-            let _receipt = tx.watch().await?;
-            Ok(())
-        } else {
-            let tx = factory.createPool(hash.to_string()).send().await?;
-            let _receipt = tx.watch().await?;
-            Ok(())
-        }
+        let tx = factory
+            .createPool(hash.to_string())
+            .from(address)
+            .value(u256_value)
+            .send()
+            .await?;
+        let _receipt = tx.watch().await?;
+        Ok(())
     }
 }

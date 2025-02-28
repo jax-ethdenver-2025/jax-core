@@ -38,7 +38,8 @@ contract RewardPool is Ownable {
     constructor() {}
 
     function initialize(address _avs, string memory _hash) external payable {
-        require(msg.value > 0, "Invalid amount");
+        // NOTE: idk if we need this
+        // require(msg.value > 0, "Invalid amount");
         require(!initialized, "Already initialized");
         require(bytes(_hash).length > 0, "Invalid hash");
 
@@ -59,7 +60,8 @@ contract RewardPool is Ownable {
     function enterPool(string memory nodeId, Signature memory signature) external whenInitialized {
         require(!peers[nodeId], "Peer already in pool");
         require(bytes(nodeId).length > 0, "Invalid node ID");
-        require(verify(signature.k, signature.r, signature.s, signature.m), "Invalid signature");
+        // TODO: add signature verification again
+        // require(verify(signature.k, signature.r, signature.s, signature.m), "Invalid signature");
         peers[nodeId] = true;
         peerList.push(nodeId);
         emit PeerAdded(nodeId);

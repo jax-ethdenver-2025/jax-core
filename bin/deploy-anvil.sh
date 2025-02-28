@@ -31,10 +31,7 @@ LATEST_RUN=$(ls -t broadcast/Factory.s.sol/31337/run-latest.json)
 
 # Extract contract addresses from the JSON file
 if [ -f "$LATEST_RUN" ]; then
-    # The contracts are deployed in this order: RewardPool, JaxToken, Factory
-    JAXTOKEN_ADDRESS=$(cat $LATEST_RUN | jq -r '.transactions[0].contractAddress')
-    REWARDPOOL_ADDRESS=$(cat $LATEST_RUN | jq -r '.transactions[1].contractAddress')
-    FACTORY_ADDRESS=$(cat $LATEST_RUN | jq -r '.transactions[2].contractAddress')
+    FACTORY_ADDRESS=$(cat $LATEST_RUN | jq -r '.transactions[4].contractAddress')
     
 else
     echo "Error: Could not find deployment JSON file"
@@ -54,6 +51,9 @@ fi
 # Update or create .env.local with the new addresses
 cd ..
 touch $ENV_FILE
+
+echo "Deployed contracts:"
+echo "Factory: $FACTORY_ADDRESS"
 
 # Append new variables
 echo "FACTORY_ADDRESS=$FACTORY_ADDRESS" > $ENV_FILE
