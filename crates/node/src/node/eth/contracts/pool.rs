@@ -108,11 +108,7 @@ impl PoolContract {
     // TODO: create a pool
 
     // TODO: get this hooked up to handlers
-    pub async fn listen_events(
-        &self,
-        hash: Hash,
-        shutdown_rx: watch::Receiver<()>,
-    ) -> Result<()> {
+    pub async fn listen_events(&self, hash: Hash, shutdown_rx: watch::Receiver<()>) -> Result<()> {
         let filter = Filter::new()
             .address(self.address)
             .from_block(BlockNumberOrTag::Latest);

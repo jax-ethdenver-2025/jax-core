@@ -273,7 +273,7 @@ impl Tracker {
     pub async fn set_pool_balance(&self, key: PoolKey, amount: U256) -> () {
         let mut pools = self.pools.write().await;
         pools.insert(key, amount);
-        () 
+        ()
     }
 
     pub async fn add_pool_deposit(&self, key: PoolKey, amount: U256) -> () {
@@ -301,7 +301,8 @@ impl Tracker {
     }
 
     pub async fn deposit_into_pool(&self, key: PoolKey, amount: U256) -> Result<()> {
-        let pool_contract = PoolContract::new(key.address, &self.eth_ws_url, &self.eth_private_key, self).await?;
+        let pool_contract =
+            PoolContract::new(key.address, &self.eth_ws_url, &self.eth_private_key, self).await?;
         pool_contract.deposit(amount).await?;
         let address = key.address;
         let balance = get_address_balance(address, &self.eth_ws_url).await?;
@@ -465,7 +466,11 @@ impl Tracker {
                 Ok(Some(trust_scores)) => Ok(Some(trust_scores)),
                 Ok(None) => Ok(None),
                 Err(e) => {
-                    tracing::warn!("Failed to get trust scores for pool {}: {}", pool.address, e);
+                    tracing::warn!(
+                        "Failed to get trust scores for pool {}: {}",
+                        pool.address,
+                        e
+                    );
                     Ok(None)
                 }
             }
@@ -486,7 +491,10 @@ impl Tracker {
                 key: key.clone(),
                 balance: *balance,
             };
-            result.insert(pool_info, eigen.compute_global_trust().await.unwrap_or_default());
+            result.insert(
+                pool_info,
+                eigen.compute_global_trust().await.unwrap_or_default(),
+            );
         }
 
         Ok(result)
@@ -510,7 +518,7 @@ impl Tracker {
             // Failure = very low trust (0.0)
             // Increase weight to 0.5 for faster trust changes
             let trust_value = if success { 1.0 } else { 0.0 };
-            eigen.update_local_trust(node_id, trust_value, 0.25); 
+            eigen.update_local_trust(node_id, trust_value, 0.25);
         }
         Ok(())
     }
@@ -539,7 +547,8 @@ impl Tracker {
         // Update trust based on probe result
         let success = matches!(probe_result, ProbeResult::Success(_));
 
-        self.update_local_trust(key.clone(), node_id, success).await?;
+        self.update_local_trust(key.clone(), node_id, success)
+            .await?;
 
         Ok(probe_result)
     }
@@ -549,7 +558,11 @@ impl Tracker {
         let peers = self.get_pool_peers(key.clone()).await?;
         for node_id in peers {
             if let Err(e) = self.probe_and_update_trust(key.clone(), node_id).await {
-                tracing::warn!("tracker::probe_pool: failed to probe node {}: {}", node_id, e);
+                tracing::warn!(
+                    "tracker::probe_pool: failed to probe node {}: {}",
+                    node_id,
+                    e
+                );
             }
         }
         Ok(())
@@ -563,11 +576,17 @@ impl Tracker {
         for i in 0..3 {
             match tracker.update_all_pools().await {
                 Ok(_) => {
-                    tracing::info!("tracker::start_background_jobs: successfully bootstrapped tracker");
+                    tracing::info!(
+                        "tracker::start_background_jobs: successfully bootstrapped tracker"
+                    );
                     break;
                 }
                 Err(e) => {
-                    tracing::warn!("tracker::start_background_jobs: bootstrap attempt {} failed: {}", i + 1, e);
+                    tracing::warn!(
+                        "tracker::start_background_jobs: bootstrap attempt {} failed: {}",
+                        i + 1,
+                        e
+                    );
                     if i < 2 {
                         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                     }
@@ -609,24 +628,27 @@ impl Tracker {
         // add the new pools to the pool set and update the pool info
         let mut pool_info = Vec::new();
         for pool in pools {
-            let pool_contract =  PoolContract::new(
-                pool,
-                &self.eth_ws_url,
-                &self.eth_private_key,
-                self,
-            )
-            .await?;
+            let pool_contract =
+                PoolContract::new(pool, &self.eth_ws_url, &self.eth_private_key, self).await?;
             let hash = match pool_contract.get_hash().await {
                 Ok(hash) => hash,
                 Err(e) => {
-                    tracing::warn!("tracker::update_all_pools: failed to get hash for pool {}: {}", pool, e);
+                    tracing::warn!(
+                        "tracker::update_all_pools: failed to get hash for pool {}: {}",
+                        pool,
+                        e
+                    );
                     continue;
                 }
             };
             let balance = match pool_contract.get_balance().await {
                 Ok(balance) => balance,
                 Err(e) => {
-                    tracing::warn!("tracker::update_all_pools: failed to get balance for pool {}: {}", pool, e);
+                    tracing::warn!(
+                        "tracker::update_all_pools: failed to get balance for pool {}: {}",
+                        pool,
+                        e
+                    );
                     continue;
                 }
             };
@@ -685,10 +707,17 @@ impl Tracker {
                 if proceed {
                     match self.enter_pool(pool_key.clone()).await {
                         Ok(_) => {
-                            tracing::info!("tracker::update_all_pools: successfully joined pool {}", pool_key.address)
+                            tracing::info!(
+                                "tracker::update_all_pools: successfully joined pool {}",
+                                pool_key.address
+                            )
                         }
                         Err(e) => {
-                            tracing::warn!("tracker::update_all_pools: failed to join pool {}: {}", pool_key.address, e)
+                            tracing::warn!(
+                                "tracker::update_all_pools: failed to join pool {}: {}",
+                                pool_key.address,
+                                e
+                            )
                         }
                     }
                 } else {
@@ -698,7 +727,10 @@ impl Tracker {
                     );
                 }
             } else {
-                tracing::debug!("tracker::update_all_pools: already in pool {}, skipping join", pool_key.address);
+                tracing::debug!(
+                    "tracker::update_all_pools: already in pool {}, skipping join",
+                    pool_key.address
+                );
             }
             // this both probes and updates trust
             let _probes = self.probe_pool(pool_key.clone()).await?;

@@ -19,7 +19,10 @@ pub async fn index_handler(State(state): State<NodeState>) -> impl IntoResponse 
     let node_id = state.iroh_node_id();
     let eth_address = state.eth_address();
     let tracker = state.tracker();
-    let eth_balance = tracker.get_address_balance(eth_address).await.expect("failed to get balance");
+    let eth_balance = tracker
+        .get_address_balance(eth_address)
+        .await
+        .expect("failed to get balance");
 
     IndexTemplate {
         node_id,

@@ -33,7 +33,10 @@ pub async fn handler(
     let local = matches!(blob_status, BlobStatus::Complete { .. });
 
     let nodes = match trust_scores {
-        Some(scores) => scores.iter().map(|(key, score)| (*key, *score)).collect::<Vec<_>>(),
+        Some(scores) => scores
+            .iter()
+            .map(|(key, score)| (*key, *score))
+            .collect::<Vec<_>>(),
         None => vec![],
     };
     let response = QueryLocationsResponse {

@@ -52,14 +52,19 @@ pub async fn handler(
         // Validate user has enough balance
         let eth_address = state.eth_address();
         let tracker = state.tracker();
-        let balance = tracker.get_address_balance(eth_address).await.map_err(ShareError::Default)?;
-        
+        let balance = tracker
+            .get_address_balance(eth_address)
+            .await
+            .map_err(ShareError::Default)?;
+
         if balance < initial_value {
             return Err(ShareError::InsufficientBalance(balance, initial_value));
         }
 
         // Create pool with initial value
-        state.tracker().create_pool(hash, Some(initial_value))
+        state
+            .tracker()
+            .create_pool(hash, Some(initial_value))
             .await
             .map_err(ShareError::Default)?;
     }
@@ -72,7 +77,11 @@ pub async fn handler(
         message: format!(
             "File '{}' has been added to the blob store and announced to the network{}",
             abs_path.display(),
-            if request.initial_value.is_some() { " with initial pool value" } else { "" }
+            if request.initial_value.is_some() {
+                " with initial pool value"
+            } else {
+                ""
+            }
         ),
     };
 

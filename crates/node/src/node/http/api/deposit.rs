@@ -1,11 +1,11 @@
+use alloy::primitives::{Address, U256};
 use axum::extract::{Json, State};
 use axum::response::{IntoResponse, Response};
 use iroh_blobs::Hash;
-use alloy::primitives::{Address, U256};
 use serde::{Deserialize, Serialize};
 
-use crate::node::State as NodeState;
 use crate::node::tracker::PoolKey;
+use crate::node::State as NodeState;
 
 #[derive(Deserialize)]
 pub struct DepositRequest {
@@ -32,14 +32,18 @@ pub async fn handler(
     // Validate user has enough balance
     let eth_address = state.eth_address();
     let tracker = state.tracker();
-    let balance = tracker.get_address_balance(eth_address).await.map_err(DepositError::Default)?;
-    
+    let balance = tracker
+        .get_address_balance(eth_address)
+        .await
+        .map_err(DepositError::Default)?;
+
     if balance < request.amount {
         return Err(DepositError::InsufficientBalance(balance, request.amount));
     }
 
     // Perform deposit
-    tracker.deposit_into_pool(pool_key, request.amount)
+    tracker
+        .deposit_into_pool(pool_key, request.amount)
         .await
         .map_err(DepositError::Default)?;
 
@@ -78,4 +82,4 @@ impl IntoResponse for DepositError {
 
         (status, body).into_response()
     }
-} 
+}
