@@ -3,6 +3,7 @@ use std::sync::Arc;
 use alloy::primitives::Address;
 use alloy::signers::local::PrivateKeySigner;
 use anyhow::Result;
+use ed25519::Signature;
 use iroh::Endpoint;
 use iroh::NodeId;
 use iroh::SecretKey;
@@ -32,7 +33,10 @@ pub enum StateSetupError {
 }
 
 impl State {
-    pub async fn from_config(config: &Config, shutdown_rx: watch::Receiver<()>) -> Result<Self, StateSetupError> {
+    pub async fn from_config(
+        config: &Config,
+        shutdown_rx: watch::Receiver<()>,
+    ) -> Result<Self, StateSetupError> {
         // set up our endpoint
         let endpoint_socket_addr = config.endpoint_listen_addr();
         let iroh_secret_key = config.iroh_secret_key()?;
@@ -48,13 +52,17 @@ impl State {
             .await
             .map_err(StateSetupError::Default)?;
 
+        let iroh_signature = iroh_secret_key.sign(iroh_node_id.as_bytes());
+
         let tracker = Tracker::new(
             shutdown_rx.clone(),
             config.eth_ws_rpc_url().clone(),
             iroh_node_id,
             config.eth_signer().expect("valid eth signer"),
             blobs_service.clone(),
-        ).expect("valid tracker");
+            iroh_signature,
+        )
+        .expect("valid tracker");
 
         // Initialize the factory contract
         let factory_address = config.factory_contract_address();
@@ -70,6 +78,14 @@ impl State {
         };
 
         Ok(state)
+    }
+
+    pub fn iroh_signature(&self) -> Signature {
+        let node_id = self.iroh_node_id();
+        let secret_key = &self.iroh_secret_key;
+        let node_id_bytes = node_id.as_bytes();
+        let signature = secret_key.sign(node_id_bytes);
+        signature
     }
 
     pub fn iroh_node_id(&self) -> NodeId {

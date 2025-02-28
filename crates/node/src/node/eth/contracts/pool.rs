@@ -1,6 +1,7 @@
-use std::{str::FromStr, sync::Arc};
 use std::collections::HashSet;
+use std::{str::FromStr, sync::Arc};
 
+use alloy::primitives::{Bytes, FixedBytes};
 use alloy::{
     eips::BlockNumberOrTag,
     network::EthereumWallet,
@@ -13,9 +14,10 @@ use alloy::{
     sol_types::SolEvent,
 };
 use anyhow::Result;
+use ed25519::Signature as Ed25519Signature;
 use futures_util::StreamExt;
 use iroh::NodeId;
-use tokio::sync::{Mutex, watch};
+use tokio::sync::{watch, Mutex};
 use url::Url;
 
 use crate::node::tracker::Tracker;
@@ -29,12 +31,20 @@ sol!(
 // Define the RewardPool contract interface
 sol! {
     #[sol(rpc)]
+    struct Signature {
+        bytes32 k;
+        bytes32 r;
+        bytes32 s;
+        bytes m;
+    }
+
+    #[sol(rpc)]
     contract RewardPool {
-        function enterPool(string memory nodeId) external;
+        function enterPool(string memory nodeId, Signature memory signature) external;
+        function getHash() external view returns (string memory);
         function getAllPeers() external view returns (string[] memory);
-        function contentHash() external view returns (string memory);
-        function originatorNodeId() external view returns (string memory);
-        function initialize(address _jaxToken, string memory _hash, string memory _originatorNodeId) external;
+        function deposit() external payable;
+        function setBountyPerEpoch(uint256 amount) external;
     }
 }
 
@@ -46,6 +56,7 @@ pub struct PoolContract {
     address: Address,
     provider: Arc<Mutex<Arc<dyn Provider>>>,
     tracker: Tracker,
+    iroh_signature: Ed25519Signature,
 }
 
 // Define event for internal communication
@@ -56,7 +67,7 @@ pub enum PoolEvent {
         pool_address: Address,
         hash: iroh_blobs::Hash,
         node_id: String,
-    }
+    },
 }
 
 impl PoolContract {
@@ -82,13 +93,18 @@ impl PoolContract {
             private_key: private_key.clone(),
             provider: Arc::new(Mutex::new(provider)),
             tracker: tracker.clone(),
+            iroh_signature: tracker.iroh_signature.clone(),
         })
     }
 
     // TODO: create a pool
 
     // TODO: get this hooked up to handlers
-    pub async fn listen_events(&self, hash: iroh_blobs::Hash, shutdown_rx: watch::Receiver<()>) -> Result<()> {
+    pub async fn listen_events(
+        &self,
+        hash: iroh_blobs::Hash,
+        shutdown_rx: watch::Receiver<()>,
+    ) -> Result<()> {
         let filter = Filter::new()
             .address(self.address)
             .from_block(BlockNumberOrTag::Latest);
@@ -133,30 +149,43 @@ impl PoolContract {
         Ok(())
     }
 
-    pub async fn enter_pool(&self, node_id: NodeId) -> Result<()> {
+    pub async fn enter_pool(&self) -> Result<()> {
         let provider = ProviderBuilder::new()
             .with_chain(alloy_chains::NamedChain::AnvilHardhat)
             .wallet(EthereumWallet::from(self.private_key.clone()))
             .on_ws(WsConnect::new(self.ws_url.as_str()))
             .await?;
         let contract = RewardPool::new(self.address, provider);
-        let tx = contract.enterPool(node_id.to_string()).send().await?;
+        let iroh_signature = self.iroh_signature.clone();
+        let node_id = self.tracker.current_node_id.clone();
+        let k_bytes = self.tracker.current_node_id.as_bytes();
+        let r_bytes = iroh_signature.r_bytes();
+        let s_bytes = iroh_signature.s_bytes();
+        let m_bytes = iroh_signature.to_bytes();
+        let signature = Signature {
+            k: FixedBytes::from_slice(k_bytes),
+            r: FixedBytes::from_slice(r_bytes),
+            s: FixedBytes::from_slice(s_bytes),
+            m: Bytes::copy_from_slice(&m_bytes),
+        };
+        let tx = contract
+            .enterPool(node_id.to_string(), signature)
+            .send()
+            .await?;
         let _receipt = tx.watch().await?;
         Ok(())
     }
 
-    pub async fn get_metadata(&self) -> Result<(iroh_blobs::Hash, NodeId)> {
+    pub async fn get_hash(&self) -> Result<iroh_blobs::Hash> {
         let provider = ProviderBuilder::new()
             .with_chain(alloy_chains::NamedChain::AnvilHardhat)
             .wallet(EthereumWallet::from(self.private_key.clone()))
             .on_ws(WsConnect::new(self.ws_url.as_str()))
             .await?;
         let contract = RewardPool::new(self.address, provider);
-        let hash = contract.contentHash().call().await?._0;
-        let originator = contract.originatorNodeId().call().await?._0;
+        let hash = contract.getHash().call().await?._0;
         let hash = iroh_blobs::Hash::from_str(&hash)?;
-        let originator = NodeId::from_str(&originator)?;
-        Ok((hash, originator))
+        Ok(hash)
     }
 
     pub async fn get_peers(&self) -> Result<Vec<NodeId>> {

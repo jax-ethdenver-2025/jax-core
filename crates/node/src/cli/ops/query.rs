@@ -6,8 +6,8 @@ use iroh_blobs::Hash;
 
 use jax::config::{Config, ConfigError};
 
-use crate::cli::args::Op;
 use super::api_client::{api_requests, ApiClient, ApiError};
+use crate::cli::args::Op;
 
 #[derive(Debug, clap::Args, Clone)]
 pub struct Query {

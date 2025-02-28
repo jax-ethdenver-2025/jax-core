@@ -12,10 +12,9 @@ struct BlobsTemplate {
 }
 
 #[axum::debug_handler]
-pub async fn blobs_handler(
-    State(state): State<NodeState>,
-) -> impl IntoResponse {
-    let blobs = state.blobs_service()
+pub async fn blobs_handler(State(state): State<NodeState>) -> impl IntoResponse {
+    let blobs = state
+        .blobs_service()
         .get_inner_blobs()
         .store()
         .blobs()
@@ -27,4 +26,4 @@ pub async fn blobs_handler(
         .collect();
 
     BlobsTemplate { blobs }
-} 
+}

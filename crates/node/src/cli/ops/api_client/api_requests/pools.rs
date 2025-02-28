@@ -1,6 +1,6 @@
+use alloy::primitives::Address;
 use iroh::NodeId;
 use iroh_blobs::Hash;
-use alloy::primitives::Address;
 use reqwest::{Client, RequestBuilder, Url};
 use serde::{Deserialize, Serialize};
 
@@ -22,4 +22,4 @@ impl ApiRequest for Pools {
         let url = base_url.join("api/v0/pools").expect("Failed to join URL");
         client.get(url)
     }
-} 
+}

@@ -6,8 +6,8 @@ use iroh_blobs::Hash;
 
 use jax::config::{Config, ConfigError};
 
-use crate::cli::args::Op;
 use super::api_client::{api_requests, ApiClient, ApiError};
+use crate::cli::args::Op;
 
 #[derive(Debug, clap::Args, Clone)]
 pub struct Probe {
@@ -36,7 +36,11 @@ pub struct ProbeOutput {
 
 impl fmt::Display for ProbeOutput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Probe results for {} from node {}:", self.hash, self.node)?;
+        writeln!(
+            f,
+            "Probe results for {} from node {}:",
+            self.hash, self.node
+        )?;
         writeln!(f, "  Elapsed: {:?}", self.stats.elapsed)?;
         writeln!(f, "  Bytes read: {}", self.stats.bytes_read)?;
         writeln!(f, "  Bytes written: {}", self.stats.bytes_written)?;
@@ -56,10 +60,7 @@ impl Op for Probe {
 
         let client = ApiClient::new(config.remote_url().as_ref())?;
 
-        let request = api_requests::Probe { 
-            hash,
-            node,
-        };
+        let request = api_requests::Probe { hash, node };
 
         let response = client.call(request).await?;
         Ok(ProbeOutput {
@@ -68,4 +69,4 @@ impl Op for Probe {
             stats: response.stats,
         })
     }
-} 
+}

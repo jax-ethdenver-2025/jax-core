@@ -8,6 +8,7 @@ use crate::node::State as NodeState;
 #[derive(Deserialize)]
 pub struct CreatePoolRequest {
     hash: Hash,
+    value: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -22,15 +23,16 @@ pub async fn handler(
 ) -> Result<impl IntoResponse, CreatePoolError> {
     // Parse the hash
     let hash = request.hash;
-    
-    // Get the node ID
-    let node_id = state.iroh_node_id();
+    let value = request.value;
 
     // TODO: return the pool address and owner address
     // Create a pool using the tracker
-    let _ = state.tracker().create_pool(hash, node_id).await
+    let _ = state
+        .tracker()
+        .create_pool(hash, value)
+        .await
         .map_err(CreatePoolError::Default)?;
-    
+
     // Return the response
     let response = CreatePoolResponse {
         success: true,

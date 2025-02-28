@@ -1,14 +1,14 @@
 use std::fmt;
 
+use alloy::primitives::Address;
 use async_trait::async_trait;
 use iroh::NodeId;
 use iroh_blobs::Hash;
-use alloy::primitives::Address;
 
 use jax::config::{Config, ConfigError};
 
-use crate::cli::args::Op;
 use super::api_client::{api_requests, ApiClient, ApiError};
+use crate::cli::args::Op;
 
 #[derive(Debug, clap::Args, Clone)]
 pub struct Pools {}
@@ -59,4 +59,4 @@ impl Op for Pools {
             pools: response.pools,
         })
     }
-} 
+}

@@ -4,12 +4,12 @@ use clap::Subcommand;
 
 use super::ops::Init as InitOp;
 use super::ops::List as ListOp;
+use super::ops::Node as NodeOp;
+use super::ops::Pools as PoolsOp;
+use super::ops::Probe as ProbeOp;
 use super::ops::Query as QueryOp;
 use super::ops::Share as ShareOp;
 use super::ops::Status as StatusOp;
-use super::ops::Node as NodeOp;
-use super::ops::Probe as ProbeOp;
-use super::ops::Pools as PoolsOp;
 
 pub use clap::Parser;
 
@@ -87,8 +87,12 @@ command_enum! {
 impl fmt::Display for OpOutput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            OpOutput::Init((node_id, eth_address)) => write!(f, "device initialized with node id: {} and eth address: {}", node_id, eth_address),
-            OpOutput::Status(output)  => write!(f, "{}", output),
+            OpOutput::Init((node_id, eth_address)) => write!(
+                f,
+                "device initialized with node id: {} and eth address: {}",
+                node_id, eth_address
+            ),
+            OpOutput::Status(output) => write!(f, "{}", output),
             OpOutput::Node(_) => write!(f, ""),
             OpOutput::List(output) => write!(f, "{}", output),
             OpOutput::Query(output) => write!(f, "{}", output),

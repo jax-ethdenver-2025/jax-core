@@ -12,16 +12,21 @@ pub struct PoolsResponse {
     message: String,
 }
 
-pub async fn handler(
-    State(state): State<NodeState>,
-) -> Result<impl IntoResponse, PoolsError> {
-    let pools = state.tracker().list_pools_with_trust()
+pub async fn handler(State(state): State<NodeState>) -> Result<impl IntoResponse, PoolsError> {
+    let pools = state
+        .tracker()
+        .list_pools_with_trust()
         .await
         .map_err(PoolsError::Default)?;
-    
-    let pools_vec = pools.into_iter()
+
+    let pools_vec = pools
+        .into_iter()
         .map(|(key, trust_scores)| {
-            (key.address, key.hash, trust_scores.into_iter().collect::<Vec<_>>())
+            (
+                key.address,
+                key.hash,
+                trust_scores.into_iter().collect::<Vec<_>>(),
+            )
         })
         .collect::<Vec<_>>();
 
@@ -54,4 +59,4 @@ impl IntoResponse for PoolsError {
 
         (status, body).into_response()
     }
-} 
+}

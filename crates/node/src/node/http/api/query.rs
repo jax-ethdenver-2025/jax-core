@@ -23,11 +23,18 @@ pub async fn handler(
     Json(request): Json<QueryLocationsRequest>,
 ) -> Result<impl IntoResponse, QueryError> {
     // Get trust scores directly - this already includes peer information
-    let trust_scores = state.tracker().get_trust_for_hash(request.hash)
+    let trust_scores = state
+        .tracker()
+        .get_trust_for_hash(request.hash)
         .await
         .map_err(QueryError::Default)?;
 
-    let blob_status = state.blobs_service().get_inner_blobs().client().status(request.hash.clone()).await?;
+    let blob_status = state
+        .blobs_service()
+        .get_inner_blobs()
+        .client()
+        .status(request.hash.clone())
+        .await?;
     let local = matches!(blob_status, BlobStatus::Complete { .. });
 
     let nodes = trust_scores.into_iter().collect::<Vec<_>>();
@@ -61,4 +68,4 @@ impl IntoResponse for QueryError {
 
         (status, body).into_response()
     }
-} 
+}

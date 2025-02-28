@@ -3565,6 +3565,7 @@ dependencies = [
  "clap",
  "console_error_panic_hook",
  "dotenvy",
+ "ed25519",
  "futures",
  "futures-util",
  "http 1.2.0",

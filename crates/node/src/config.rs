@@ -111,7 +111,8 @@ impl OnDiskConfig {
     }
 
     pub fn factory_contract_address(&self) -> Address {
-        self.factory_contract_address.expect("factory contract address is not set")
+        self.factory_contract_address
+            .expect("factory contract address is not set")
     }
 
     pub fn find_config_dir() -> PathBuf {
@@ -298,7 +299,7 @@ impl Config {
 
         Ok(SecretKey::from_bytes(&array))
     }
-    
+
     pub fn blobs_path(&self) -> &PathBuf {
         &self.blobs_path
     }

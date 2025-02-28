@@ -3,17 +3,26 @@ pragma solidity ^0.8.28;
 
 import {ERC20} from "solady/tokens/ERC20.sol";
 import {Ownable} from "solady/auth/Ownable.sol";
+import {IAVS} from "./interface/IAVS.sol";
+import {Ed25519} from "./libraries/ED25519.sol";
+
+struct Signature {
+    bytes32 k;
+    bytes32 r;
+    bytes32 s;
+    bytes m;
+}
 
 contract RewardPool is Ownable {
-    ERC20 public jaxToken;
+    IAVS public avs;
+
     uint256 public bountyPerEpoch;
     mapping(address => uint256) public balances;
     mapping(address => uint256) public rewards;
-    
+
     // Add storage for pool metadata
     string public contentHash;
-    string public originatorNodeId;
-    
+
     // Storage for historical peers
     mapping(string => bool) public peers;
     string[] public peerList;
@@ -28,20 +37,17 @@ contract RewardPool is Ownable {
 
     constructor() {}
 
-    function initialize(
-        address _jaxToken,
-        string memory _hash,
-        string memory _originatorNodeId
-    ) external {
+    function initialize(address _avs, string memory _hash) external payable {
+        require(msg.value > 0, "Invalid amount");
         require(!initialized, "Already initialized");
-        require(_jaxToken != address(0), "Invalid token address");
         require(bytes(_hash).length > 0, "Invalid hash");
-        require(bytes(_originatorNodeId).length > 0, "Invalid originator");
-        
+
         initialized = true;
-        jaxToken = ERC20(_jaxToken);
         contentHash = _hash;
-        originatorNodeId = _originatorNodeId;
+        avs = IAVS(_avs);
+
+        balances[msg.sender] += msg.value;
+        emit Deposit(msg.sender, msg.value);
     }
 
     // Add modifier for initialization check
@@ -50,34 +56,38 @@ contract RewardPool is Ownable {
         _;
     }
 
-    function enterPool(string memory nodeId) external whenInitialized {
+    function enterPool(string memory nodeId, Signature memory signature) external whenInitialized {
         require(!peers[nodeId], "Peer already in pool");
         require(bytes(nodeId).length > 0, "Invalid node ID");
+        require(verify(signature.k, signature.r, signature.s, signature.m), "Invalid signature");
         peers[nodeId] = true;
         peerList.push(nodeId);
         emit PeerAdded(nodeId);
     }
 
-    // Add helper function to get all peers
     function getAllPeers() external view returns (string[] memory) {
         return peerList;
     }
 
-    function deposit(uint256 amount) external whenInitialized {
-        require(amount > 0, "Invalid amount");
-        require(jaxToken.transferFrom(msg.sender, address(this), amount), "Deposit failed");
-        balances[msg.sender] += amount;
-        emit Deposit(msg.sender, amount);
+    function getHash() external view returns (string memory) {
+        return contentHash;
+    }
+
+    function deposit() external payable whenInitialized {
+        require(msg.value > 0, "Invalid amount");
+        balances[msg.sender] += msg.value;
+        emit Deposit(msg.sender, msg.value);
     }
 
     function setBountyPerEpoch(uint256 _bounty) external onlyOwner whenInitialized {
         bountyPerEpoch = _bounty;
     }
 
-    function distributeRewards() external whenInitialized {
-        // Implement AVS logic here
-        // For each user, calculate their reward based on AVS
-        // Update their rewards mapping
-        // Emit RewardDistributed event
+    function verify(bytes32 k, bytes32 r, bytes32 s, bytes memory m) public pure returns (bool) {
+        return Ed25519.verify(k, r, s, m);
+    }
+
+    function getWalletProviders() public view returns (address[] memory) {
+        return avs.getWalletProviders();
     }
 }

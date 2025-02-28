@@ -7,9 +7,7 @@ use iroh_blobs::{
     },
     protocol::GetRequest,
     protocol::RangeSpecSeq,
-    BlobFormat,
-    Hash,
-    HashAndFormat,
+    BlobFormat, Hash, HashAndFormat,
 };
 use rand::{Rng, SeedableRng};
 

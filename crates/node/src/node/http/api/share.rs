@@ -1,7 +1,7 @@
 use axum::extract::{Json, State};
 use axum::response::{IntoResponse, Response};
-use iroh_blobs::BlobFormat;
 use iroh_blobs::ticket::BlobTicket;
+use iroh_blobs::BlobFormat;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -29,26 +29,31 @@ pub async fn handler(
 
     // Read file content
     let content = tokio::fs::read(&abs_path).await.map_err(ShareError::Io)?;
-    
+
     // Determine format based on file extension
     let format = BlobFormat::Raw;
-    
+
     // Use blobs_service instead of blob_service
-    let hash = state.blobs_service().store_blob(content)
+    let hash = state
+        .blobs_service()
+        .store_blob(content)
         .await
         .map_err(ShareError::BlobOperation)?;
-    
+
     // Create ticket
     let node_id = state.endpoint().node_id();
-    let ticket = BlobTicket::new(node_id.into(), hash, format)
-        .map_err(ShareError::BlobOperation)?;
+    let ticket =
+        BlobTicket::new(node_id.into(), hash, format).map_err(ShareError::BlobOperation)?;
 
     let hash_str = hash.to_string();
-    
+
     let response = ShareResponse {
         ticket: ticket.to_string(),
         hash: hash_str,
-        message: format!("File '{}' has been added to the blob store and announced to the network", abs_path.display()),
+        message: format!(
+            "File '{}' has been added to the blob store and announced to the network",
+            abs_path.display()
+        ),
     };
 
     Ok((axum::http::StatusCode::OK, Json(response)))

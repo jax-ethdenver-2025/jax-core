@@ -30,7 +30,11 @@ pub struct StatusOutput {
 
 impl std::fmt::Display for StatusOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Server Status:\n- Node ID: {}\n- ETH Address: {}", self.node_id, self.eth_address)
+        write!(
+            f,
+            "Server Status:\n- Node ID: {}\n- ETH Address: {}",
+            self.node_id, self.eth_address
+        )
     }
 }
 

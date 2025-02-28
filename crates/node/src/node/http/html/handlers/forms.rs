@@ -40,9 +40,7 @@ impl std::fmt::Display for ProbeStats {
 
 #[axum::debug_handler]
 pub async fn share_form_handler() -> impl IntoResponse {
-    ShareTemplate { 
-        message: None 
-    }
+    ShareTemplate { message: None }
 }
 
 #[axum::debug_handler]
@@ -59,4 +57,4 @@ pub async fn query_form_handler() -> impl IntoResponse {
         nodes: None,
         message: None,
     }
-} 
+}
