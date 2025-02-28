@@ -42,6 +42,12 @@ pub struct PoolInfo {
     pub balance: U256,
 }
 
+impl PoolInfo {
+    pub fn key(&self) -> &PoolKey {
+        &self.key
+    }
+}
+
 /// Simple in-memory store for network state
 #[derive(Clone)]
 pub struct Tracker {
@@ -222,14 +228,14 @@ impl Tracker {
                     Some(event) = factory_rx.recv() => {
                         match event {
                             FactoryEvent::PoolCreated { pool_address, hash, balance } => {
-                                if let Ok(hash) = iroh_blobs::Hash::from_str(&hash) {
                                     let key = PoolKey { hash, address: pool_address };
                                     // TODO (amiller68): handle errors here
                                     tracker.add_pool(key, balance).await.expect("failed to add pool");
-                                }
                             }
                         }
                     }
+                    // NOTE (amiller68): see not in eth::contracts::pool.rs, i don't think
+                    //  we're even emitting these events
                     Some(event) = pool_rx.recv() => {
                         match event {
                             PoolEvent::PeerAdded { pool_address, hash, node_id } => {
@@ -238,8 +244,8 @@ impl Tracker {
                                     tracker.add_pool_peer(key, node_id).await;
                                 }
                             },
-                            // TODO (amiller68): handle pool events for deposits -- for now
-                            //  we'll just update this via polling
+                            // TODO: handle deposits i guess for now we'll update via polling
+                            _ => {}
                         }
                     }
                     _ = shutdown_rx.changed() => {
@@ -257,11 +263,28 @@ impl Tracker {
         tracing::info!("Creating pool {}", hash);
         let factory = self.factory_contract.read().await;
         // TODO (amiller68): for some reason this seemed to be returning the
-        //  wrong address
+        //  wrong address -- we should be updating our local knowledge of pools here
         let _pool_address = factory.create_pool(hash, value).await?;
         // tracing::info!("Pool created at {}", pool_address);
         // self.add_pool(PoolKey { hash, address: pool_address }).await?;
         Ok(())
+    }
+
+    pub async fn set_pool_balance(&self, key: PoolKey, amount: U256) -> () {
+        let mut pools = self.pools.write().await;
+        pools.insert(key, amount);
+        () 
+    }
+
+    pub async fn add_pool_deposit(&self, key: PoolKey, amount: U256) -> () {
+        let mut pools = self.pools.write().await;
+        let value = pools.get(&key).copied();
+        if let Some(value) = value {
+            pools.insert(key, amount + value);
+        } else {
+            tracing::warn!("node::tracker::: attempted to up deposit state of non-extant pool");
+        }
+        ()
     }
 
     /// NOTE (amiller68): this is a janky place to put this, but it's convenient
@@ -277,9 +300,13 @@ impl Tracker {
         Ok(balance)
     }
 
-    pub async fn deposit_into_pool(&self, key: PoolKey, amount: u64) -> Result<()> {
+    pub async fn deposit_into_pool(&self, key: PoolKey, amount: U256) -> Result<()> {
         let pool_contract = PoolContract::new(key.address, &self.eth_ws_url, &self.eth_private_key, self).await?;
         pool_contract.deposit(amount).await?;
+        let address = key.address;
+        let balance = get_address_balance(address, &self.eth_ws_url).await?;
+        // update local state -- this can just be incrementing the balance
+        self.add_pool_deposit(key, balance).await;
         Ok(())
     }
 
@@ -579,8 +606,8 @@ impl Tracker {
         // get all pools from the factory
         let pools = factory.get_all_pools().await?;
 
-        // add the new pools to the pool set
-        let mut pool_keys = Vec::new();
+        // add the new pools to the pool set and update the pool info
+        let mut pool_info = Vec::new();
         for pool in pools {
             let pool_contract =  PoolContract::new(
                 pool,
@@ -603,22 +630,31 @@ impl Tracker {
                     continue;
                 }
             };
-            let pool_key = PoolKey {
-                hash,
-                address: pool,
+            let pi = PoolInfo {
+                key: PoolKey {
+                    hash,
+                    address: pool,
+                },
+                balance,
             };
-            pool_keys.push(pool_key.clone());
-            if !self.pools.read().await.contains_key(&pool_key) {
-                self.add_pool(pool_key.clone(), balance).await?;
+            pool_info.push(pi.clone());
+            let pk = pi.key();
+            if !self.pools.read().await.contains_key(&pk) {
+                self.add_pool(pk.clone(), balance).await?;
+            } else {
+                // update the pool balance
+                self.pools.write().await.insert(pk.clone(), balance);
             }
         }
 
-        for pool_key in pool_keys {
+        // update the pool peers and trust scores
+        for pi in pool_info {
+            let pool_key = pi.key();
             // get the current pool peers
             let peers = self.get_pool_peers(pool_key.clone()).await?;
             let peers_set: HashSet<_> = peers.clone().into_iter().collect();
             // get the historical peers
-            let peers = get_peers(pool_key.address, &self.eth_ws_url).await?;
+            let peers = get_peers(pi.key().address, &self.eth_ws_url).await?;
             let set: HashSet<_> = peers.clone().into_iter().collect();
             // get the new peer/
             let new_peers = set.difference(&peers_set);

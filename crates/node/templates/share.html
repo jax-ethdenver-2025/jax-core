@@ -20,8 +20,9 @@
                 Create Pool
             </label>
         </div>
-        
-        <div class="form-group pool-options" style="display: none;">
+       
+        <!-- TODO: fix contract call to initialize pool -->
+        <!-- <div class="form-group pool-options" style="display: none;">
             <label for="value">Initial Pool Value</label>
             <input type="number" 
                    id="value" 
@@ -30,7 +31,7 @@
                    max="{{ eth_balance }}"
                    placeholder="Enter initial pool value">
             <small class="form-text text-muted">Available balance: {{ eth_balance }} wei</small>
-        </div>
+        </div> -->
 
         <button type="submit">Share</button>
     </form>
@@ -39,28 +40,28 @@
 
 <script>
 // Helper to show messages
-function showMessage(message, isError = false) {
+function _showMessage(message, isError = false) {
     const el = document.getElementById('share-message');
     el.textContent = message;
     el.className = `message ${isError ? 'error' : 'success'}`;
 }
 
 // Toggle pool options visibility
-document.getElementById('create_pool').addEventListener('change', (e) => {
-    const poolOptions = document.querySelector('.pool-options');
-    poolOptions.style.display = e.target.checked ? 'block' : 'none';
+// document.getElementById('create_pool').addEventListener('change', (e) => {
+//     const poolOptions = document.querySelector('.pool-options');
+//     poolOptions.style.display = e.target.checked ? 'block' : 'none';
     
-    // Clear value when hiding
-    if (!e.target.checked) {
-        document.getElementById('value').value = '';
-    }
-});
+//     // Clear value when hiding
+//     if (!e.target.checked) {
+//         document.getElementById('value').value = '';
+//     }
+// });
 
 document.getElementById('share-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const path = e.target.path.value;
     const createPool = e.target.create_pool.checked;
-    const value = e.target.value.value;
+    // const value = e.target.value.value;
 
     try {
         // Share the file
@@ -77,16 +78,18 @@ document.getElementById('share-form').addEventListener('submit', async (e) => {
 
         // Create pool if requested
         if (createPool) {
-            if (!value) {
-                throw new Error('Pool value is required when creating a pool');
-            }
+            // if (!value) {
+            //     throw new Error('Pool value is required when creating a pool');
+            // }
 
             const poolRes = await fetch('/api/v0/pool', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ 
                     hash: shareData.hash,
-                    initial_value: parseInt(value)
+                    // TODO: fix this
+                    // initial_value: parseInt(value)
+                    initial_value: 0
                 })
             });
             const poolData = await poolRes.json();
@@ -95,9 +98,9 @@ document.getElementById('share-form').addEventListener('submit', async (e) => {
             message += '\nPool created successfully!';
         }
 
-        showMessage(message);
+        _showMessage(message);
     } catch (err) {
-        showMessage(err.message, true);
+        _showMessage(err.message, true);
     }
 });
 </script>

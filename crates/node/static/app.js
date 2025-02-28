@@ -13,44 +13,44 @@ function showMessage(elementId, message, isError = false) {
     el.className = `message ${isError ? 'error' : 'success'}`;
 }
 
-// Share form handler
-document.querySelector('#share-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const path = e.target.path.value;
-    const createPool = e.target.create_pool.checked;
-    const value = e.target.value.value;
+// // Share form handler
+// document.querySelector('#share-form')?.addEventListener('submit', async (e) => {
+//     e.preventDefault();
+//     const path = e.target.path.value;
+//     const createPool = e.target.create_pool.checked;
+//     const value = e.target.value.value;
 
-    try {
-        // Share the file
-        const shareRes = await fetch(API.SHARE, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ path })
-        });
-        const shareData = await shareRes.json();
+//     try {
+//         // Share the file
+//         const shareRes = await fetch(API.SHARE, {
+//             method: 'POST',
+//             headers: {'Content-Type': 'application/json'},
+//             body: JSON.stringify({ path })
+//         });
+//         const shareData = await shareRes.json();
 
-        if (!shareRes.ok) throw new Error(shareData.error);
+//         if (!shareRes.ok) throw new Error(shareData.error);
 
-        let message = `File shared successfully!\nHash: ${shareData.hash}`;
+//         let message = `File shared successfully!\nHash: ${shareData.hash}`;
 
-        // Create pool if requested
-        if (createPool) {
-            const poolRes = await fetch(API.CREATE_POOL, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ hash: shareData.hash })
-            });
-            const poolData = await poolRes.json();
+//         // Create pool if requested
+//         if (createPool) {
+//             const poolRes = await fetch(API.CREATE_POOL, {
+//                 method: 'POST',
+//                 headers: {'Content-Type': 'application/json'},
+//                 body: JSON.stringify({ hash: shareData.hash })
+//             });
+//             const poolData = await poolRes.json();
 
-            if (!poolRes.ok) throw new Error(poolData.error);
-            message += '\nPool created successfully!';
-        }
+//             if (!poolRes.ok) throw new Error(poolData.error);
+//             message += '\nPool created successfully!';
+//         }
 
-        showMessage('share-message', message);
-    } catch (err) {
-        showMessage('share-message', err.message, true);
-    }
-});
+//         showMessage('share-message', message);
+//     } catch (err) {
+//         showMessage('share-message', err.message, true);
+//     }
+// });
 
 // Query form handler
 document.querySelector('#query-form')?.addEventListener('submit', async (e) => {

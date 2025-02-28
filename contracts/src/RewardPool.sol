@@ -28,7 +28,9 @@ contract RewardPool is Ownable {
 
     event PeerAdded(string indexed nodeId);
     event PeerRemoved(string indexed nodeId);
-    event Deposit(address indexed user, uint256 amount);
+    // NOTE: we should probably not pass hash and do better
+    //  indexing off chain
+    event Deposit(uint256 amount, bytes32 hash);
     event RewardDistributed(address indexed user, uint256 reward);
 
     /* initializer / constructor */
@@ -44,7 +46,7 @@ contract RewardPool is Ownable {
         hash = _hash;
         avs = IAVS(_avs);
 
-         emit Deposit(msg.sender, msg.value);
+        emit Deposit(msg.value, _hash);
     }
 
     // Add modifier for initialization check
@@ -68,7 +70,7 @@ contract RewardPool is Ownable {
     
     function deposit() external payable whenInitialized {
         require(msg.value > 0, "Invalid amount");
-        emit Deposit(msg.sender, msg.value);
+        emit Deposit(msg.value, hash);
     }
 
     // TODO: distribute rewards and interface with the avs

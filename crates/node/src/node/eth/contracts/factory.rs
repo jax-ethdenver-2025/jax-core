@@ -19,11 +19,11 @@ use url::Url;
 // Define event for internal communication
 #[derive(Debug, Clone)]
 pub enum FactoryEvent {
-    PoolCreated { pool_address: Address, hash: String, balance: U256 },
+    PoolCreated { pool_address: Address, hash: Hash, balance: U256 },
 }
 
 sol!(
-    event PoolCreated(address indexed poolAddress, string hash, uint256 balance);
+    event PoolCreated(address indexed poolAddress, bytes32 hash, uint256 balance);
 );
 
 sol!(
@@ -87,8 +87,12 @@ impl FactoryContract {
                         let primitive_log = Log::from(log);
                         if let Ok(event) = PoolCreated::decode_log(&primitive_log, true) {
                             let pool_address = event.poolAddress;
-                            let hash = event.hash.clone();
-                            let balance = event.balance;
+                            let hash_fixed_bytes = event.hash.clone();
+                            let hash_vec = hash_fixed_bytes.as_slice().to_vec();
+        let mut hash_bytes = [0u8; 32];
+        hash_bytes.copy_from_slice(hash_vec.as_slice());
+        let hash = iroh_blobs::Hash::from_bytes(hash_bytes);
+        let balance = event.balance;
 
                             // Send event to tracker
                             let _ = event_sender.send(FactoryEvent::PoolCreated {

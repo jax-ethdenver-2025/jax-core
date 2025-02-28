@@ -17,6 +17,7 @@ use anyhow::Result;
 use ed25519::Signature as Ed25519Signature;
 use futures_util::StreamExt;
 use iroh::NodeId;
+use iroh_blobs::Hash;
 use tokio::sync::{watch, Mutex};
 use url::Url;
 
@@ -25,6 +26,7 @@ use crate::node::tracker::Tracker;
 // Define the PeerAdded event
 sol!(
     event PeerAdded(string nodeId);
+    event Deposit(uint256 amount, bytes32 hash);
 );
 
 // TODO: make this use the sol file
@@ -59,14 +61,20 @@ pub struct PoolContract {
     iroh_signature: Ed25519Signature,
 }
 
+#[allow(dead_code)]
+// NOTE (amiller68): not even used, see not below on event listener
 // Define event for internal communication
 #[derive(Debug, Clone)]
 pub enum PoolEvent {
-    #[allow(dead_code)]
     PeerAdded {
         pool_address: Address,
-        hash: iroh_blobs::Hash,
+        hash: Hash,
         node_id: String,
+    },
+    Deposit {
+        pool_address: Address,
+        hash: Hash,
+        amount: U256,
     },
 }
 
@@ -102,7 +110,7 @@ impl PoolContract {
     // TODO: get this hooked up to handlers
     pub async fn listen_events(
         &self,
-        hash: iroh_blobs::Hash,
+        hash: Hash,
         shutdown_rx: watch::Receiver<()>,
     ) -> Result<()> {
         let filter = Filter::new()
@@ -119,6 +127,12 @@ impl PoolContract {
         let pool_hash = hash;
         let mut shutdown = shutdown_rx;
 
+        // TODO: i think the original design for this assumed i was sending pool messages
+        //  over an event channel but it doesn't look like cursor actually implemented that pattern ...
+        //  we should fix this and get on event channels
+        // Yeah i really gotta unmess this up because its kinda trash and makes no sense
+        //  like the ideas are so screwed up -- we should be emitting events and letting the tracker
+        //  manage its own state. For now this will write directly to the tracker
         tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -135,6 +149,16 @@ impl PoolContract {
                                 tracker.add_pool_peer(key, node_id).await;
                                 tracing::info!("Added peer {} to pool {}", node_id, pool_address);
                             }
+                        } else if let Ok(event) = Deposit::decode_log(&primitive_log, true) {
+                            // NOTE (amiller68): this is actually just screwing with the frontend and local state
+                            //  just trace it for now
+                            let amount = event.amount;
+                            // let key = PoolKey {
+                            //     hash: pool_hash,
+                            //     address: pool_address,
+                            // };
+                            // tracker.add_pool_deposit(key, amount).await;
+                            tracing::info!("Added deposit {} to pool {}", amount, pool_address);
                         }
                     }
                     _ = shutdown.changed() => {
@@ -186,15 +210,14 @@ impl PoolContract {
         Ok(balance)
     }
 
-    pub async fn deposit(&self, amount: u64) -> Result<()> {
+    pub async fn deposit(&self, amount: U256) -> Result<()> {
         let provider = ProviderBuilder::new()
             .with_chain(alloy_chains::NamedChain::AnvilHardhat)
             .wallet(EthereumWallet::from(self.private_key.clone()))
             .on_ws(WsConnect::new(self.ws_url.as_str()))
             .await?;
         let contract = RewardPool::new(self.address, provider);
-        let u256_amount = U256::from(amount);
-        let tx = contract.deposit().value(u256_amount).send().await?;
+        let tx = contract.deposit().value(amount).send().await?;
         let _receipt = tx.watch().await?;
         Ok(())
     }
@@ -210,7 +233,7 @@ impl PoolContract {
         let hash_vec = hash_fixed_bytes.as_slice().to_vec();
         let mut hash_bytes = [0u8; 32];
         hash_bytes.copy_from_slice(hash_vec.as_slice());
-        let hash = iroh_blobs::Hash::from_bytes(hash_bytes);
+        let hash = Hash::from_bytes(hash_bytes);
         Ok(hash)
     }
 }

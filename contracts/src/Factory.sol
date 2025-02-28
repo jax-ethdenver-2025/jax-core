@@ -34,6 +34,10 @@ contract Factory {
 
     /* Public Functions */
 
+    // TODO: paying the value forward into the pool
+    //  does not seem to be working -- for now just gonna
+    //  not allow users to initialize the pool with value 
+    //  through the frontend
     function createPool(
         bytes32 hash
     ) external payable returns (address poolAddress) {

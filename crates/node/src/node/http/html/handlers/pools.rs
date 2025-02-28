@@ -13,10 +13,15 @@ use crate::node::State as NodeState;
 #[template(path = "pools.html")]
 struct PoolsTemplate {
     pools: Vec<(Address, Hash, U256, Vec<(NodeId, f64)>)>,
+    eth_balance: U256,
 }
 
 #[axum::debug_handler]
 pub async fn pools_handler(State(state): State<NodeState>) -> impl IntoResponse {
+    let eth_address = state.eth_address();
+    let tracker = state.tracker();
+    let eth_balance = tracker.get_address_balance(eth_address).await.expect("failed to get balance");
+
     let pools = state
         .tracker()
         .list_pools_with_trust()
@@ -44,7 +49,10 @@ pub async fn pools_handler(State(state): State<NodeState>) -> impl IntoResponse 
         b_max.partial_cmp(&a_max).unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    let template = PoolsTemplate { pools: pools_vec };
+    let template = PoolsTemplate { 
+        pools: pools_vec,
+        eth_balance,
+    };
     
     // Convert template to HTML and return with proper content type
     (
