@@ -19,7 +19,9 @@ struct ProbeTemplate {
 #[template(path = "query.html")]
 struct QueryTemplate {
     // hash: Option<Hash>,
+    #[allow(dead_code)]
     nodes: Option<Vec<(NodeId, f64)>>,
+    #[allow(dead_code)]
     message: Option<String>,
 }
 

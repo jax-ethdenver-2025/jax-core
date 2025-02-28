@@ -14,6 +14,8 @@ contract Factory {
     // Add storage for pools
     address[] public pools;
     mapping(address => bool) public isPool;
+    // Add mapping for hash tracking
+    mapping(string => bool) public usedHashes;
 
     /* Events */
 
@@ -36,11 +38,15 @@ contract Factory {
     function createPool(
         string memory hash
     ) external payable returns (address poolAddress) {
+        // Check if hash is already used
+        require(!usedHashes[hash], "Hash already used");
+        
         poolAddress = _create(hash, msg.value);
         
-        // Track the new pool
+        // Track the new pool and hash
         pools.push(poolAddress);
         isPool[poolAddress] = true;
+        usedHashes[hash] = true;
         
         emit PoolCreated(poolAddress, hash);
     }

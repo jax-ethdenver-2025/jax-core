@@ -55,12 +55,12 @@ pub async fn handler(
                     message: format!("Probe timed out after {:?}", duration),
                 }),
             )),
-            ProbeResult::Error(e) => Ok((
+            ProbeResult::Error => Ok((
                 axum::http::StatusCode::OK,
                 Json(ProbeResponse {
                     stats: None,
                     trust_updated: false,
-                    message: format!("Probe failed: {}", e),
+                    message: "Probe failed".to_string(),
                 }),
             )),
         }

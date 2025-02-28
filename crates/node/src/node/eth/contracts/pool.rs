@@ -207,7 +207,7 @@ impl PoolContract {
 }
 
 // TODO: jank as hell to have this here
-pub async fn get_historical_peers(address: Address, ws_url: &Url) -> Result<HashSet<NodeId>> {
+pub async fn get_peers(address: Address, ws_url: &Url) -> Result<HashSet<NodeId>> {
     let provider = ProviderBuilder::new()
         .with_chain(alloy_chains::NamedChain::AnvilHardhat)
         .on_ws(WsConnect::new(ws_url.as_str()))

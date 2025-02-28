@@ -1,60 +1,136 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container">
-    <h1>Query Content</h1>
-    
-    {% if let Some(msg) = message %}
-        <div class="message">{{ msg }}</div>
-    {% endif %}
-    
-    <form id="query-form" class="form">
+<div class="container mt-4">
+    <h2>Query Blob Locations</h2>
+    <form id="queryForm" class="mb-4">
         <div class="form-group">
-            <label for="hash">Content Hash:</label>
-            <input type="text" placeholder="enter hash here" id="hash" name="hash" required>
+            <label for="hash">Blob Hash:</label>
+            <input type="text" class="form-control" id="hash" required>
         </div>
-        
-        <button type="submit">Query</button>
+        <button type="submit" class="btn btn-primary">Query</button>
     </form>
-    
-    <div id="query-message"></div>
-    <div id="query-results"></div>
-    
-    <script>
-        // Get hash from URL query parameters and fill input field
-        document.addEventListener('DOMContentLoaded', function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const hashParam = urlParams.get('hash');
-            if (hashParam) {
-                document.getElementById('hash').value = hashParam;
+
+    <div id="results" class="d-none">
+        <h3>Results</h3>
+        <div class="card mb-3">
+            <div class="card-body">
+                <p id="localStatus"></p>
+                <p id="nodeCount"></p>
+                <div id="nodeList"></div>
+                <div class="mt-3">
+                    <button id="downloadBtn" class="btn btn-success d-none">
+                        <i class="fas fa-download"></i> Download Blob
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Get hash from URL query parameters and fill input field
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const hashParam = urlParams.get('hash');
+    if (hashParam) {
+        document.getElementById('hash').value = hashParam;
+        // Trigger the query automatically if hash is provided
+        document.getElementById('queryForm').dispatchEvent(new Event('submit'));
+    }
+});
+
+document.getElementById('queryForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const hash = document.getElementById('hash').value;
+    const results = document.getElementById('results');
+    const downloadBtn = document.getElementById('downloadBtn');
+
+    try {
+        const response = await fetch(`/api/v0/query/${hash}`);
+        const data = await response.json();
+
+        if (response.ok) {
+            results.classList.remove('d-none');
+            
+            // Update local status with more descriptive message
+            const localStatusEl = document.getElementById('localStatus');
+            if (data.local) {
+                localStatusEl.textContent = 'Local Status: Available locally - can download directly';
+                localStatusEl.classList.add('text-success');
+                localStatusEl.classList.remove('text-warning');
+            } else {
+                localStatusEl.textContent = 'Local Status: Not available locally - will need to fetch from network';
+                localStatusEl.classList.add('text-warning');
+                localStatusEl.classList.remove('text-success');
+            }
+
+            // Update remote nodes info
+            document.getElementById('nodeCount').textContent = 
+                `Found ${data.nodes.length} remote nodes hosting this blob`;
+
+            const nodeList = document.getElementById('nodeList');
+            nodeList.innerHTML = data.nodes
+                .map(([node, trust]) => 
+                    `<div class="mb-1">Node: ${node} (Trust: ${trust.toFixed(3)})</div>`)
+                .join('');
+
+            // Show download button if blob exists locally or on remote nodes
+            if (data.local || data.nodes.length > 0) {
+                downloadBtn.classList.remove('d-none');
+                downloadBtn.onclick = () => downloadBlob(hash);
+                
+                // Update button text based on availability
+                downloadBtn.innerHTML = data.local ? 
+                    '<i class="fas fa-download"></i> Download Local Blob' :
+                    '<i class="fas fa-download"></i> Fetch and Download Blob';
+            } else {
+                downloadBtn.classList.add('d-none');
+            }
+        } else {
+            alert(`Error: ${data.error}`);
+        }
+    } catch (err) {
+        alert(`Error: ${err.message}`);
+    }
+});
+
+async function downloadBlob(hash) {
+    try {
+        const response = await fetch(`/api/v0/pull/${hash}`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/octet-stream'
             }
         });
-    </script>
+        
+        if (!response.ok) {
+            // Only try to parse as JSON if it's an error response
+            if (response.headers.get('content-type')?.includes('application/json')) {
+                const error = await response.json();
+                throw new Error(error.error);
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
-    {% if let Some(nodes) = nodes %}
-    <div class="results">
-        <h3>Content Locations:</h3>
-        {% if nodes.is_empty() %}
-            <p>No known locations</p>
-        {% else %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>Node ID</th>
-                        <th>Trust Score</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for (node, trust) in nodes %}
-                    <tr>
-                        <td>{{ node }}</td>
-                        <td>{{ trust }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% endif %}
-    </div>
-    {% endif %}
-</div>
+        // Get filename from content-disposition header if present
+        const filename = response.headers.get('content-disposition')?.split('filename=')[1] || `blob-${hash}`;
+        
+        // Create blob from response
+        const blob = await response.blob();
+        
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+    } catch (err) {
+        alert(`Download failed: ${err.message}`);
+    }
+}
+</script>
 {% endblock %} 

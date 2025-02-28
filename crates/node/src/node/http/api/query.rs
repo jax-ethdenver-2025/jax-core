@@ -1,4 +1,4 @@
-use axum::extract::{Json, State, Path};
+use axum::extract::{Json, Path, State};
 use axum::response::{IntoResponse, Response};
 use iroh_blobs::rpc::client::blobs::BlobStatus;
 use iroh_blobs::Hash;
@@ -20,7 +20,7 @@ pub async fn handler(
     // Get trust scores directly - this already includes peer information
     let trust_scores = state
         .tracker()
-        .get_trust_for_hash(hash)
+        .get_hash_trust(&hash)
         .await
         .map_err(QueryError::Default)?;
 
@@ -32,7 +32,10 @@ pub async fn handler(
         .await?;
     let local = matches!(blob_status, BlobStatus::Complete { .. });
 
-    let nodes = trust_scores.into_iter().collect::<Vec<_>>();
+    let nodes = match trust_scores {
+        Some(scores) => scores.iter().map(|(key, score)| (*key, *score)).collect::<Vec<_>>(),
+        None => vec![],
+    };
     let response = QueryLocationsResponse {
         local,
         nodes: nodes.clone(),

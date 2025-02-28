@@ -18,7 +18,7 @@ use tokio::sync::RwLock;
 use url::Url;
 
 use crate::node::eth::contracts::{
-    get_historical_peers, FactoryContract, FactoryEvent, PoolContract, PoolEvent,
+    get_peers, FactoryContract, FactoryEvent, PoolContract, PoolEvent,
 };
 use crate::node::iroh::BlobsService;
 
@@ -97,8 +97,8 @@ impl NetworkTrustFetcher {
         self.peers.write().await.insert(peer);
     }
 
-    async fn get_historical_peers(&self) -> Result<HashSet<NodeId>> {
-        get_historical_peers(self.pool_key.address, &self.eth_ws_url).await
+    async fn get_peers(&self) -> Result<HashSet<NodeId>> {
+        get_peers(self.pool_key.address, &self.eth_ws_url).await
     }
 }
 
@@ -125,9 +125,9 @@ impl TrustFetcher for NetworkTrustFetcher {
     async fn discover_peers(&self, _: &NodeId) -> Result<HashSet<NodeId>> {
         let current_peers = self.peers.read().await.clone();
 
-        if let Ok(historical_peers) = self.get_historical_peers().await {
+        if let Ok(peers) = self.get_peers().await {
             let mut all_peers = current_peers;
-            all_peers.extend(historical_peers);
+            all_peers.extend(peers);
             return Ok(all_peers);
         }
 
@@ -136,11 +136,11 @@ impl TrustFetcher for NetworkTrustFetcher {
 }
 
 // Add this enum to track probe outcomes
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ProbeResult {
     Success(Stats),
     Timeout(std::time::Duration),
-    Error(anyhow::Error),
+    Error,
 }
 
 impl Tracker {
@@ -220,6 +220,7 @@ impl Tracker {
         let tracker = self.clone();
         let mut shutdown_rx = self.shutdown_rx.clone();
 
+        // passively listen for new pools and peers
         tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -258,14 +259,18 @@ impl Tracker {
     pub async fn create_pool(&self, hash: Hash, value: Option<u64>) -> Result<()> {
         tracing::info!("Creating pool {}", hash);
         if let Some(factory) = self.factory_contract.read().await.as_ref() {
-            factory.create_pool(hash, value).await?;
+            let _pool_address = factory.create_pool(hash, value).await?;
+            // tracing::info!("Pool created at {}", pool_address);
+            // self.add_pool(PoolKey { hash, address: pool_address }).await?;
         }
         Ok(())
     }
 
     pub async fn add_pool(&self, key: PoolKey) -> Result<()> {
-        tracing::info!("Adding pool {}", key.address);
         self.pools.write().await.insert(key.clone());
+
+        // TODO (amiller68): we should probably do some sanity checking here
+        //  like ensuring the pool doesn't already exist, etc.
 
         // Create new EigenTrust instance for this pool
         let network_fetcher = NetworkTrustFetcher::new(key.clone(), self.eth_ws_url.clone());
@@ -275,17 +280,17 @@ impl Tracker {
             .await
             .insert(key.clone(), pool_eigen);
 
-        // we're just tracking the pool here, we don't commit to hosting yet
-        // // Create ticket and download blob
-        // let ticket = BlobTicket::new(
-        //     creator.into(),
-        //     key.hash,
-        //     iroh_blobs::BlobFormat::Raw
-        // ).expect("valid ticket");
-
-        // if let Err(e) = self.blobs_service.download_blob(&ticket).await {
-        //     tracing::warn!("Failed to download blob for pool {}: {}", key.address, e);
-        // }
+        // Look up and add historical peers
+        if let Ok(peers) = get_peers(key.address, &self.eth_ws_url).await {
+            for peer in peers.clone() {
+                self.add_pool_peer(key.clone(), peer).await;
+            }
+            tracing::info!(
+                "Added {} historical peers for pool {}",
+                peers.len(),
+                key.address
+            );
+        }
 
         // Check if we already have a listener for this pool
         let mut listeners = self.pool_listeners.write().await;
@@ -308,9 +313,6 @@ impl Tracker {
             }
         }
 
-        // // Enter the pool
-        // self.enter_pool(key.clone(), self.current_node_id).await?;
-
         Ok(())
     }
 
@@ -328,21 +330,6 @@ impl Tracker {
             // Set initial local trust to 0
             eigen.update_local_trust(node_id, 0.0, 1.0);
         }
-    }
-
-    pub async fn get_peers_for_hash(&self, hash: Hash) -> Result<Vec<NodeId>> {
-        let pool_trust = self.pool_trust.read().await;
-        let mut nodes = Vec::new();
-
-        for (key, eigen) in pool_trust.iter() {
-            if key.hash == hash {
-                if let Some(fetcher) = eigen.get_fetcher() {
-                    nodes.extend(fetcher.peers.read().await.iter().cloned());
-                }
-            }
-        }
-
-        Ok(nodes)
     }
 
     /// Get global known peers for a given hash, regardless of pool
@@ -399,34 +386,8 @@ impl Tracker {
         );
         match tokio::time::timeout(std::time::Duration::from_secs(2), probe_future).await {
             Ok(result) => result,
-            Err(_) => Err(anyhow::anyhow!("Probe timed out after 10 seconds")),
+            Err(_) => Err(anyhow::anyhow!("Probe timed out after 2 seconds")),
         }
-    }
-
-    /// Record successful download from a peer in a specific pool
-    pub async fn record_successful_download(&self, key: PoolKey, provider: NodeId) -> Result<()> {
-        if let Some(eigen) = self.pool_trust.write().await.get_mut(&key) {
-            if let Some(fetcher) = eigen.get_fetcher_mut() {
-                fetcher
-                    .record_interaction(self.current_node_id, provider, true)
-                    .await;
-            }
-            eigen.update_local_trust(provider, 1.0, 0.1);
-        }
-        Ok(())
-    }
-
-    /// Record failed download from a peer in a specific pool
-    pub async fn record_failed_download(&self, key: PoolKey, provider: NodeId) -> Result<()> {
-        if let Some(eigen) = self.pool_trust.write().await.get_mut(&key) {
-            if let Some(fetcher) = eigen.get_fetcher_mut() {
-                fetcher
-                    .record_interaction(self.current_node_id, provider, false)
-                    .await;
-            }
-            eigen.update_local_trust(provider, 0.0, 0.1);
-        }
-        Ok(())
     }
 
     pub async fn get_pool_trust(&self, key: &PoolKey) -> Result<Option<HashMap<NodeId, f64>>> {
@@ -437,19 +398,35 @@ impl Tracker {
         }
     }
 
-    /// Get all known pools with trust scores for their peers
+    pub async fn get_hash_trust(&self, hash: &Hash) -> Result<Option<HashMap<NodeId, f64>>> {
+        // find the pool with this hash -- there should only be one
+        let pools = self.pools.read().await;
+        let pool = pools.iter().find(|p| p.hash == *hash);
+        if let Some(pool) = pool {
+            match self.get_pool_trust(pool).await {
+                Ok(Some(trust_scores)) => Ok(Some(trust_scores)),
+                Ok(None) => Ok(None),
+                Err(e) => {
+                    tracing::warn!("Failed to get trust scores for pool {}: {}", pool.address, e);
+                    Ok(None)
+                }
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
     pub async fn list_pools_with_trust(&self) -> Result<BTreeMap<PoolKey, HashMap<NodeId, f64>>> {
         let mut result = BTreeMap::new();
         let mut pool_trust = self.pool_trust.write().await;
 
         for (key, eigen) in pool_trust.iter_mut() {
-            result.insert(key.clone(), eigen.compute_global_trust().await?);
+            result.insert(key.clone(), eigen.compute_global_trust().await.unwrap_or_default());
         }
 
         Ok(result)
     }
 
-    // Modify the update_local_trust method to be more aggressive with failures
     pub async fn update_local_trust(
         &self,
         key: PoolKey,
@@ -463,7 +440,6 @@ impl Tracker {
                     .record_interaction(self.current_node_id, node_id, success)
                     .await;
             }
-
             // Make trust changes more dramatic
             // Success = high trust (1.0)
             // Failure = very low trust (0.0)
@@ -474,7 +450,6 @@ impl Tracker {
         Ok(())
     }
 
-    // Modify probe_and_update_trust to be stricter about timeouts
     pub async fn probe_and_update_trust(
         &self,
         key: PoolKey,
@@ -493,7 +468,7 @@ impl Tracker {
                     ProbeResult::Timeout(stats.elapsed)
                 }
             }
-            Err(e) => ProbeResult::Error(e),
+            Err(_) => ProbeResult::Error,
         };
 
         // Update trust based on probe result
@@ -505,7 +480,7 @@ impl Tracker {
             self.update_local_trust(key.clone(), node_id, false).await?;
 
             // Additional penalty for complete failures (errors)
-            if matches!(probe_result, ProbeResult::Error(_)) {
+            if matches!(probe_result, ProbeResult::Error) {
                 // Apply an extra penalty by updating trust again
                 self.update_local_trust(key, node_id, false).await?;
             }
@@ -516,75 +491,30 @@ impl Tracker {
         Ok(probe_result)
     }
 
-    // Modify get_trust_for_hash to use the same trust computation as list_pools_with_trust
-    pub async fn get_trust_for_hash(&self, hash: Hash) -> Result<HashMap<NodeId, f64>> {
-        let mut combined_trust = HashMap::new();
-        let mut pool_trust = self.pool_trust.write().await;
-
-        for (key, eigen) in pool_trust.iter_mut() {
-            if key.hash == hash {
-                // Use compute_global_trust directly instead of averaging
-                let trust_scores = eigen.compute_global_trust().await?;
-                for (node_id, score) in trust_scores {
-                    combined_trust.insert(node_id, score);
-                }
-                // Break after first pool since we want the exact trust scores
-                break;
-            }
-        }
-
-        Ok(combined_trust)
-    }
-
     // Add this method to probe all nodes in a pool
     pub async fn probe_pool(&self, key: PoolKey) -> Result<Vec<(NodeId, ProbeResult)>> {
-        tracing::info!("Probing pool {}", key.address);
         let mut results = Vec::new();
         let peers = self.get_pool_peers(key.clone()).await?;
 
-        tracing::info!("Pool {} has {} peers", key.address, peers.len());
-
         for node_id in peers {
-            tracing::info!("Probing node {}", node_id);
             match self.probe_and_update_trust(key.clone(), node_id).await {
                 Ok(probe_result) => {
-                    tracing::info!("Probed node {} with result {:?}", node_id, probe_result);
-                    results.push((node_id, probe_result));
+                    results.push((node_id, probe_result.clone()));
+                    if matches!(probe_result, ProbeResult::Success(_)) {
+                        self.update_local_trust(key.clone(), node_id, true).await?;
+                    } else {
+                        self.update_local_trust(key.clone(), node_id, false).await?;
+                    }
                 }
-                Err(e) => {
-                    tracing::warn!("Failed to probe node {}: {}", node_id, e);
+                Err(_) => {
                     self.update_local_trust(key.clone(), node_id, false).await?;
-                    results.push((node_id, ProbeResult::Error(e)));
+                    results.push((node_id, ProbeResult::Error));
                 }
             }
         }
 
         Ok(results)
     }
-
-    // Add convenience method to probe all pools for a hash
-    pub async fn probe_hash(
-        &self,
-        hash: Hash,
-    ) -> Result<Vec<(PoolKey, Vec<(NodeId, ProbeResult)>)>> {
-        let mut results = Vec::new();
-        let pools = self.pools.read().await;
-
-        for key in pools.iter() {
-            if key.hash == hash {
-                match self.probe_pool(key.clone()).await {
-                    Ok(pool_results) => results.push((key.clone(), pool_results)),
-                    Err(e) => tracing::warn!("Failed to probe pool {}: {}", key.address, e),
-                }
-            }
-        }
-
-        Ok(results)
-    }
-
-    // pub async fn get_pool_creator(&self, key: &PoolKey) -> Option<NodeId> {
-    //     self.pool_creators.read().await.get(key).cloned()
-    // }
 
     /// Start background jobs for pool maintenance
     pub async fn start_background_jobs(&self) {
@@ -616,7 +546,6 @@ impl Tracker {
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
-                        tracing::debug!("Starting periodic pool update");
                         if let Err(e) = tracker.update_all_pools().await {
                             tracing::warn!("Failed to update pools: {}", e);
                         }
@@ -632,112 +561,98 @@ impl Tracker {
 
     /// Update all pools - fetch new peers and recalculate trust scores
     async fn update_all_pools(&self) -> Result<()> {
-        let pools = self.pools.read().await.clone();
-        let mut updated_count = 0;
+        // read the factory contract
+        let factory = self.factory_contract.read().await;
+        let factory = factory
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Factory not initialized"))?;
 
-        for pool_key in pools {
-            match self.probe_pool(pool_key.clone()).await {
-                Ok(results) => {
-                    // Fetch historical peers from chain
-                    match get_historical_peers(pool_key.address, &self.eth_ws_url).await {
-                        Ok(historical_peers) => {
-                            for peer in historical_peers {
-                                self.add_pool_peer(pool_key.clone(), peer).await;
-                            }
-                        }
-                        Err(e) => tracing::warn!(
-                            "Failed to get historical peers for {}: {}",
-                            pool_key.address,
-                            e
-                        ),
-                    }
-                    let mut responsive_peers = 0;
-                    let total_peers = results.len();
+        // get all pools from the factory
+        let pools = factory.get_all_pools().await?;
 
-                    for (node_id, result) in &results {
-                        match result {
-                            ProbeResult::Success(_) => {
-                                responsive_peers += 1;
-                            }
-                            ProbeResult::Timeout(_) | ProbeResult::Error(_) => {
-                                // Apply extra penalty for unresponsive peers
-                                self.update_local_trust(pool_key.clone(), *node_id, false)
-                                    .await?;
-                            }
-                        }
-                    }
-
-                    tracing::info!(
-                        "Updated pool {} with {}/{} responsive peers",
-                        pool_key.address,
-                        responsive_peers,
-                        total_peers
-                    );
-                    updated_count += 1;
-
-                    // Check if we're already in the pool on-chain before trying to join
-                    match get_historical_peers(pool_key.address, &self.eth_ws_url).await {
-                        Ok(chain_peers) => {
-                            if !chain_peers.contains(&self.current_node_id) {
-                                // check if you have the hash
-                                let stat = self.blobs_service.get_blob_stat(pool_key.hash).await?;
-                                let mut proceed = stat;
-                                if !stat {
-                                    // iterate through the peers and attempt to download the hash
-                                    for peer in chain_peers {
-                                        let ticket = BlobTicket::new(
-                                            peer.into(),
-                                            pool_key.hash,
-                                            iroh_blobs::BlobFormat::Raw,
-                                        )
-                                        .expect("valid ticket");
-                                        if let Ok(_) =
-                                            self.blobs_service.download_blob(&ticket).await
-                                        {
-                                            proceed = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                                if proceed {
-                                    match self.enter_pool(pool_key.clone()).await {
-                                        Ok(_) => tracing::info!(
-                                            "Successfully joined pool {}",
-                                            pool_key.address
-                                        ),
-                                        Err(e) => tracing::warn!(
-                                            "Failed to join pool {}: {}",
-                                            pool_key.address,
-                                            e
-                                        ),
-                                    }
-                                } else {
-                                    tracing::warn!(
-                                        "Failed to download hash for pool {}, skipping join",
-                                        pool_key.address
-                                    );
-                                }
-                            } else {
-                                tracing::debug!(
-                                    "Already in pool {}, skipping join",
-                                    pool_key.address
-                                );
-                            }
-                        }
-                        Err(e) => tracing::warn!(
-                            "Failed to check pool membership for {}: {}",
-                            pool_key.address,
-                            e
-                        ),
-                    }
-                }
+        // add the new pools to the pool set
+        let mut pool_keys = Vec::new();
+        for pool in pools {
+            let pool_contract =  PoolContract::new(
+                pool,
+                &self.eth_ws_url,
+                &self.eth_private_key,
+                self,
+            )
+            .await?;
+            let hash = match pool_contract.get_hash().await {
+                Ok(hash) => hash,
                 Err(e) => {
-                    tracing::warn!("Failed to update pool {}: {}", pool_key.address, e);
+                    tracing::warn!("Failed to get hash for pool {}: {}", pool, e);
+                    continue;
                 }
+            };
+            let pool_key = PoolKey {
+                hash,
+                address: pool,
+            };
+            pool_keys.push(pool_key.clone());
+            if !self.pools.read().await.contains(&pool_key) {
+                self.add_pool(pool_key.clone()).await?;
             }
         }
 
-        tracing::info!("Updated {} pools", updated_count);
+        for pool_key in pool_keys {
+            // get the current pool peers
+            let peers = self.get_pool_peers(pool_key.clone()).await?;
+            let peers_set: HashSet<_> = peers.clone().into_iter().collect();
+            // get the historical peers
+            let peers = get_peers(pool_key.address, &self.eth_ws_url).await?;
+            let set: HashSet<_> = peers.clone().into_iter().collect();
+            // get the new peer/
+            let new_peers = set.difference(&peers_set);
+            // add the new peers
+            for peer in new_peers {
+                self.add_pool_peer(pool_key.clone(), peer.clone()).await;
+            }
+
+            // this both probes and updates trust
+            let _probes = self.probe_pool(pool_key.clone()).await?;
+
+            if !peers_set.contains(&self.current_node_id) {
+                // check if you have the hash
+                let stat = self.blobs_service.get_blob_stat(pool_key.hash).await?;
+                let mut proceed = stat;
+                if !stat {
+                    // iterate through the peers and attempt to download the hash
+                    for peer in peers.clone() {
+                        let ticket = BlobTicket::new(
+                            peer.into(),
+                            pool_key.hash,
+                            iroh_blobs::BlobFormat::Raw,
+                        )
+                        .expect("valid ticket");
+                        if let Ok(_) = self.blobs_service.download_blob(&ticket).await {
+                            proceed = true;
+                            break;
+                        }
+                    }
+                }
+                if proceed {
+                    match self.enter_pool(pool_key.clone()).await {
+                        Ok(_) => {
+                            tracing::info!("Successfully joined pool {}", pool_key.address)
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to join pool {}: {}", pool_key.address, e)
+                        }
+                    }
+                } else {
+                    tracing::warn!(
+                        "Failed to download hash for pool {}, skipping join",
+                        pool_key.address
+                    );
+                }
+            } else {
+                tracing::debug!("Already in pool {}, skipping join", pool_key.address);
+            }
+        }
+
         Ok(())
     }
 
@@ -804,26 +719,44 @@ impl Tracker {
                 pool_address,
                 peers_len
             );
-
-            // for provider in providers {
-            //     let ticket = BlobTicket::new(
-            //         provider.into(),
-            //         hash,
-            //         iroh_blobs::BlobFormat::Raw
-            //     ).expect("valid ticket");
-
-            //     if let Ok(_) = self.blobs_service.download_blob(&ticket).await {
-            //         // Add pool and enter
-            //         if let Ok(_) = self.add_pool(key.clone()).await {
-            //             joined_count += 1;
-            //             tracing::info!("Successfully joined pool {} during bootstrap", pool_address);
-            //         }
-            //         break;
-            //     }
-            // }
         }
-
         tracing::info!("Bootstrap complete");
+        Ok(())
+    }
+
+    /// Find first available peer with positive trust score
+    pub async fn find_peer(&self, hash: Hash) -> Option<NodeId> {
+        let pools = self.pools.read().await;
+
+        for pool_key in pools.iter() {
+            if pool_key.hash == hash {
+                if let Ok(Some(trust_scores)) = self.get_pool_trust(pool_key).await {
+                    // Return first peer with positive trust score
+                    return trust_scores
+                        .into_iter()
+                        .find(|(peer, trust)| *trust > 0.0 && *peer != self.current_node_id)
+                        .map(|(peer, _)| peer);
+                }
+            }
+        }
+        None
+    }
+
+    /// Pull a blob from the network
+    pub async fn pull_blob(&self, hash: Hash) -> Result<()> {
+        // Check if we already have the blob
+        let stat = self.blobs_service.get_blob_stat(hash).await?;
+        if !stat {
+            let peer = self
+                .find_peer(hash)
+                .await
+                .ok_or_else(|| anyhow::anyhow!("No peers available for hash {}", hash))?;
+
+            let ticket = BlobTicket::new(peer.into(), hash, iroh_blobs::BlobFormat::Raw)
+                .expect("valid ticket");
+
+            let _stats = self.blobs_service.download_blob(&ticket).await?;
+        }
         Ok(())
     }
 }

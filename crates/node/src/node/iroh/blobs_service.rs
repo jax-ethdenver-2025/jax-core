@@ -1,6 +1,6 @@
 use anyhow::Result;
 use iroh::Endpoint;
-use iroh_blobs::rpc::client::blobs::BlobStatus;
+use iroh_blobs::rpc::client::blobs::{BlobStatus, Reader};
 use iroh_blobs::{net_protocol::Blobs, store::fs::Store, ticket::BlobTicket, Hash};
 use std::path::Path;
 use std::sync::Arc;
@@ -49,5 +49,10 @@ impl BlobsService {
             .finish()
             .await?;
         Ok(())
+    }
+
+    /// Read a blob from the given reader
+    pub async fn read_blob(&self, hash: Hash) -> Result<Reader> {
+        self.blobs.client().read(hash).await
     }
 }
