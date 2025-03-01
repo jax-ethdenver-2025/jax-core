@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
-import "@eigenlayer-middleware/src/libraries/BN254.sol";
+import "eigenlayer-middleware/src/libraries/BN254.sol";
 
 interface IIncredibleSquaringTaskManager {
     // EVENTS
@@ -64,4 +64,7 @@ interface IIncredibleSquaringTaskManager {
 
     /// @notice Returns the TASK_RESPONSE_WINDOW_BLOCK
     function getTaskResponseWindowBlock() external view returns (uint32);
+
+    // Add the function declaration for getTaskResponse
+    function getTaskResponse(uint32 taskIndex) external view returns (TaskResponse memory);
 }

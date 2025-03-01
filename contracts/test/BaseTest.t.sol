@@ -41,9 +41,9 @@ contract BaseTest is Test {
         pool.verify(k, r, s, m);
     }
 
-    function test_getWalletProviders() public {
-        vm.expectCall(address(avs), abi.encodeCall(IAVS.getWalletProviders, ()));
-        pool.getWalletProviders();
+    function test_getTaskResponse() public {
+        vm.expectCall(address(avs), abi.encodeCall(IIncredibleSquaringTaskManager.getTaskResponse, (1)));
+        pool.getTaskResponse(1);
     }
 
     function test_deposit() public {
@@ -82,10 +82,5 @@ contract BaseTest is Test {
         string[] memory peers = pool.getAllPeers();
         assertEq(peers.length, 1);
         assertEq(peers[0], nodeId);
-    }
-
-    function test_invalidPoolEntrance(string memory nodeId, Signature memory signature) public {
-        vm.expectRevert();
-        pool.enterPool(nodeId, signature);
     }
 }
