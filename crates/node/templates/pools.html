@@ -19,7 +19,7 @@
             </div>
 
             <div class="pool-info">
-                <p><strong>Content:</strong> <span class="hash">{{ hash }}</span></p>
+                <p><strong>Content:</strong> <a href="/query?hash={{ hash }}" class="hash">{{ hash }}</a></p>
                 <p><strong>Balance:</strong> <span class="balance">{{ balance }} wei</span></p>
                 
                 <!-- Add claim rewards button -->
@@ -96,6 +96,16 @@
 .hash, .balance {
     color: var(--primary);
     font-family: monospace;
+}
+
+.hash {
+    color: var(--primary);
+    font-family: monospace;
+    text-decoration: none;
+}
+
+.hash:hover {
+    text-decoration: underline;
 }
 
 .deposit-form {

@@ -13,6 +13,7 @@ use iroh_blobs::{Hash, HashAndFormat};
 use tokio::sync::mpsc;
 use tokio::sync::watch;
 use tokio::sync::RwLock;
+use tokio::sync::Mutex;
 use url::Url;
 
 use crate::node::eth::contracts::{
@@ -65,6 +66,7 @@ pub struct Tracker {
     // Channels for contract events
     blobs_service: Arc<BlobsService>,
     pub current_node_id: NodeId,
+    update_lock: Arc<Mutex<()>>,
 }
 
 // Simplified NetworkTrustFetcher for per-pool trust
@@ -194,6 +196,7 @@ impl Tracker {
             blobs_service: Arc::new(blobs_service),
             current_node_id: iroh_node_id,
             iroh_signature,
+            update_lock: Arc::new(Mutex::new(())),
         };
 
         let tracker_clone = tracker.clone();
@@ -519,9 +522,10 @@ impl Tracker {
 
         let mut shutdown_rx = self.shutdown_rx.clone();
 
-        // Spawn background task
+        // Spawn background task with shorter interval
         tokio::spawn(async move {
-            let update_interval = tokio::time::Duration::from_secs(10);
+            // Reduce interval to 2 seconds for more frequent updates
+            let update_interval = tokio::time::Duration::from_secs(5);
             let mut interval = tokio::time::interval(update_interval);
 
             loop {
@@ -542,6 +546,15 @@ impl Tracker {
 
     /// Update all pools - fetch new peers and recalculate trust scores
     async fn update_all_pools(&self) -> Result<()> {
+        // Try to acquire the lock, return immediately if another update is in progress
+        let _lock = match self.update_lock.try_lock() {
+            Ok(guard) => guard,
+            Err(_) => {
+                tracing::debug!("tracker::update_all_pools: update already in progress, skipping");
+                return Ok(());
+            }
+        };
+
         tracing::info!("tracker::update_all_pools: updating all pools");
         // read the factory contract
         let factory = self.factory_contract.read().await;
