@@ -9,7 +9,7 @@ fn main() {
     }
 
     let hash_str = &args[1];
-    
+
     // Try to parse the hash from either hex or base32
     let hash = match Hash::from_str(hash_str) {
         Ok(h) => h,
@@ -23,4 +23,4 @@ fn main() {
     println!("Hash representations:");
     println!("  Base32-NoPadding:    {}", hash.to_string());
     println!("  Hex: {}", hash.to_hex());
-} 
+}

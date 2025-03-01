@@ -15,7 +15,7 @@ jax-eigen-trust = { path = "../eigen-trust" }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-axum = { version = "0.7", features = ["macros"] }
+axum = { version = "0.7", features = ["macros", "multipart"] }
 askama = { version = "0.12.1", features = ["with-axum"] }
 askama_axum = "0.4.0"
 console_error_panic_hook = "0.1"
