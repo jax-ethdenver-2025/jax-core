@@ -6,20 +6,10 @@ ANVIL_PORT=8545
 PRIVATE_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 ENV_FILE=".env.local"
 
-# Ensure anvil is running
-if ! nc -z localhost $ANVIL_PORT; then
-    echo "Anvil is not running on port $ANVIL_PORT. Starting anvil..."
-    anvil --port $ANVIL_PORT &
-    ANVIL_PID=$!
-    
-    # Give anvil time to start
-    sleep 2
-    
-    echo "Anvil started with PID: $ANVIL_PID"
-    KILL_ANVIL=true
-else
-    echo "Anvil already running on port $ANVIL_PORT"
-    KILL_ANVIL=false
+# Exit if anvil is not running
+if ! nc -z localhost "$ANVIL_PORT" >/dev/null 2>&1; then
+    echo "Anvil is not running on port $ANVIL_PORT. Exiting."
+    exit 1
 fi
 
 # Deploy contracts
@@ -30,23 +20,13 @@ forge script script/Factory.s.sol:FactoryScript --fork-url http://localhost:$ANV
 LATEST_RUN=$(ls -t broadcast/Factory.s.sol/31337/run-latest.json)
 
 # Extract contract addresses from the JSON file
-if [ -f "$LATEST_RUN" ]; then
-    FACTORY_ADDRESS=$(cat $LATEST_RUN | jq -r '.transactions[4].contractAddress')
-    
-else
-    echo "Error: Could not find deployment JSON file"
+FACTORY_ADDRESS=$(jq -r '.transactions[] | select(.contractName == "Factory") | .contractAddress' "$LATEST_RUN")
+
+# Check if the address is found and set it, otherwise exit with an error
+if [ -z "$FACTORY_ADDRESS" ] || [ "$FACTORY_ADDRESS" == "null" ]; then
+    echo "Error: No contract with contractName 'Factory' found."
     exit 1
 fi
-
-# # Create addresses.json
-# echo "{
-#   \"Factory\": \"$FACTORY_ADDRESS\",
-#   \"JaxToken\": \"$JAXTOKEN_ADDRESS\",
-#   \"RewardPool\": \"$REWARDPOOL_ADDRESS\"
-# }" > ../addresses.json
-
-# echo "Contract addresses saved to addresses.json:"
-# cat ../addresses.json | jq
 
 # Update or create .env.local with the new addresses
 cd ..
@@ -56,7 +36,7 @@ echo "Deployed contracts:"
 echo "Factory: $FACTORY_ADDRESS"
 
 # Append new variables
-echo "FACTORY_ADDRESS=$FACTORY_ADDRESS" > $ENV_FILE
+echo "FACTORY_ADDRESS=$FACTORY_ADDRESS" >$ENV_FILE
 
 # Kill anvil if we started it
 if [ "$KILL_ANVIL" = true ]; then
