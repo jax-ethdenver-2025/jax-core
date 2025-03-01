@@ -12,23 +12,12 @@ NODE2_ENDPOINT_PORT=3002
 NODE1_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 NODE2_KEY="0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
 
-# Helper function to wait for service to be ready
-wait_for_port() {
-    local port=$1
-    while ! nc -z localhost $port; do
-        sleep 1
-    done
-}
+# Exit if anvil is not running
+if ! nc -z localhost "$ANVIL_PORT" >/dev/null 2>&1; then
+    echo "Anvil is not running on port $ANVIL_PORT. Exiting."
+    exit 1
+fi
 
-# Kill existing session if it exists
-tmux kill-session -t jax 2>/dev/null || true
-
-# Create new tmux session
-tmux new-session -d -s jax -n 'anvil'
-
-# Window 0: Anvil
-tmux send-keys 'anvil --port '$ANVIL_PORT C-m
-wait_for_port $ANVIL_PORT
 ./bin/deploy-anvil.sh
 
 # Clean up existing data
