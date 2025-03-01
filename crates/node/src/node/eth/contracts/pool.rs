@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use alloy::primitives::{Bytes, FixedBytes, U256};
+use alloy::primitives::{FixedBytes, U256};
 use alloy::{
     eips::BlockNumberOrTag,
     network::EthereumWallet,
@@ -14,7 +14,6 @@ use alloy::{
     sol_types::SolEvent,
 };
 use anyhow::Result;
-use ed25519::signature::digest::consts::N32;
 use ed25519::Signature as Ed25519Signature;
 use futures_util::StreamExt;
 use iroh::NodeId;
@@ -171,7 +170,6 @@ impl PoolContract {
             .on_ws(WsConnect::new(self.ws_url.as_str()))
             .await?;
         let contract = RewardPool::new(self.address, provider);
-        let message = self.private_key.address().into_array();
         let iroh_signature = self.iroh_signature;
         let node_id = self.tracker.current_node_id;
         let k_bytes = FixedBytes::<32>::try_from(self.tracker.current_node_id.as_bytes()).expect("Failed to convert node_id to FixedBytes");
@@ -242,10 +240,8 @@ pub async fn get_peers(address: Address, ws_url: &Url) -> Result<HashSet<NodeId>
 }
 
 mod test {
+    #[allow(unused)]
     use super::*;
-    use alloy::signers::local::LocalWallet;
-    use tokio::sync::watch;
-    use url::Url;
 
     #[tokio::test]
     async fn test_enter_pool() -> Result<()> {

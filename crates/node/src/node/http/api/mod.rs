@@ -11,6 +11,7 @@ mod probe;
 mod pull;
 mod query;
 mod share;
+mod claim_rewards;
 mod share_stream;
 
 pub use create_pool::handler as create_pool_handler;
@@ -22,6 +23,7 @@ pub use pull::handler as pull_handler;
 pub use query::handler as query_handler;
 pub use share::handler as share_handler;
 pub use share_stream::handler as share_stream_handler;
+pub use claim_rewards::handler as claim_rewards_handler;
 
 use crate::node::State as NodeState;
 
@@ -45,6 +47,7 @@ pub fn router(state: NodeState) -> Router<NodeState> {
         .route("/pools", routing::get(pools_handler))
         .route("/pull/:hash", routing::get(pull_handler))
         .route("/pool/deposit", routing::post(deposit_handler))
+        .route("/rewards", routing::post(claim_rewards_handler))
         .with_state(state)
         .layer(cors_layer)
         // Remove the default body size limit

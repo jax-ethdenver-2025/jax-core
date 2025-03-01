@@ -21,6 +21,13 @@
             <div class="pool-info">
                 <p><strong>Content:</strong> <span class="hash">{{ hash }}</span></p>
                 <p><strong>Balance:</strong> <span class="balance">{{ balance }} wei</span></p>
+                
+                <!-- Add claim rewards button -->
+                <button onclick="handleClaimRewards('{{ address }}', '{{ hash }}')" class="button button-secondary">
+                    <i class="fas fa-gift"></i>
+                    Claim Rewards
+                </button>
+                <div id="rewards-message-{{ address }}" class="message"></div>
             </div>
 
             <!-- Add deposit form -->
@@ -36,9 +43,7 @@
                                    min="0" 
                                    max="{{ eth_balance }}"
                                    required
-                                   placeholder="Enter amount..."
-                                   onfocus="pauseRefresh()"
-                                   onblur="resumeRefresh()">
+                                   placeholder="Enter amount...">
                             <button type="submit" class="button button-primary">
                                 <i class="fas fa-coins"></i>
                                 Deposit
@@ -161,34 +166,20 @@
     border: 1px solid #EF4444;
     color: #EF4444;
 }
+
+.button-secondary {
+    background: var(--background);
+    border: 1px solid var(--primary);
+    color: var(--primary);
+}
+
+.button-secondary:hover {
+    background: var(--primary);
+    color: var(--background);
+}
 </style>
 
 <script>
-let refreshInterval;
-let isRefreshPaused = false;
-
-function startRefresh() {
-    refreshInterval = setInterval(() => {
-        if (!isRefreshPaused) {
-            // Only refresh if no form is active
-            const activeElement = document.activeElement;
-            if (!activeElement || !activeElement.form) {
-                window.location.reload();
-            }
-        }
-    }, 5000);
-}
-
-function pauseRefresh() {
-    isRefreshPaused = true;
-}
-
-function resumeRefresh() {
-    isRefreshPaused = false;
-}
-
-// Start the refresh when page loads
-startRefresh();
 
 async function handleDeposit(event, address, hash) {
     event.preventDefault();
@@ -220,8 +211,6 @@ async function handleDeposit(event, address, hash) {
         // Clear input
         amountInput.value = '';
         
-        // Resume refresh and force one update
-        resumeRefresh();
         setTimeout(() => window.location.reload(), 1000);
     } catch (error) {
         messageDiv.textContent = error.message;
@@ -229,6 +218,37 @@ async function handleDeposit(event, address, hash) {
     }
     
     return false;
+}
+
+async function handleClaimRewards(address, hash) {
+    const messageDiv = document.getElementById(`rewards-message-${address}`);
+    
+    try {
+        const response = await fetch('/api/v0/rewards', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                address: address,
+                hash: hash
+            })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error);
+        }
+
+        messageDiv.textContent = data.message;
+        messageDiv.className = 'message success';
+        
+        setTimeout(() => window.location.reload(), 1000);
+    } catch (error) {
+        messageDiv.textContent = error.message;
+        messageDiv.className = 'message error';
+    }
 }
 </script>
 {% endblock %} 

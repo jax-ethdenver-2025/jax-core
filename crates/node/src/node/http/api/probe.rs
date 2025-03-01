@@ -72,12 +72,16 @@ pub async fn handler(
             iroh_blobs::BlobFormat::Raw,
         )?;
 
-        let stats = Tracker::probe_node(ticket).await?;
+        let probe_result = Tracker::probe_node(ticket).await;
 
         Ok((
             axum::http::StatusCode::OK,
             Json(ProbeResponse {
-                stats: Some(stats),
+                stats: match probe_result {
+                    ProbeResult::Success(stats) => Some(stats),
+                    ProbeResult::Timeout(_) => None,
+                    ProbeResult::Error => None,
+                },
                 trust_updated: false,
                 message: "Successfully probed node".to_string(),
             }),

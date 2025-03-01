@@ -243,6 +243,18 @@ impl Tracker {
         Ok(balance)
     }
 
+    pub async fn claim_pool_rewards(&self, key: PoolKey) -> Result<()> {
+        // make sure the pool exists
+        let pools = self.pools.read().await;
+        if !pools.contains_key(&key) {
+            return Err(anyhow::anyhow!("Pool does not exist: {}", key.address));
+        }
+        let factory = self.factory_contract.read().await;
+        let hash = key.hash;
+        factory.claim_rewards(hash).await?;
+        Ok(())
+    }
+
     pub async fn deposit_into_pool(&self, key: PoolKey, amount: U256) -> Result<()> {
         let pool_contract =
             PoolContract::new(key.address, &self.eth_ws_url, &self.eth_private_key, self).await?;
@@ -339,7 +351,7 @@ impl Tracker {
         Ok(())
     }
 
-    pub async fn probe_node(ticket: BlobTicket) -> Result<Stats> {
+    pub async fn probe_node(ticket: BlobTicket) -> ProbeResult {
         tracing::info!("tracker::probe_node: probing node {:?}", ticket.node_addr().node_id);
         let ephemeral_endpoint = create_ephemeral_endpoint().await;
         let hash_and_format = HashAndFormat {
@@ -352,17 +364,17 @@ impl Tracker {
             &ticket.node_addr().node_id,
             &hash_and_format,
         );
-        let timeout = std::time::Duration::from_secs(3);
+        let timeout = std::time::Duration::from_secs(5);
         match tokio::time::timeout(timeout, probe_future).await {
             Ok(Ok(result)) => {
                 tracing::info!("success probe result: {:?}", result);
-                Ok(result)
+                ProbeResult::Success(result)
             }
             Ok(Err(e)) => {
                 tracing::info!("error probe result: {:?}", e);
-                Err(e)
+                ProbeResult::Error
             }
-            Err(_) => Err(anyhow::anyhow!("Probe timed out after {:?} seconds", timeout)),
+            Err(_) => ProbeResult::Timeout(timeout),
         }
     }
 
@@ -421,9 +433,10 @@ impl Tracker {
         &self,
         key: PoolKey,
         node_id: NodeId,
-        success: bool,
+        probe_result: ProbeResult,
     ) -> Result<()> {
         if let Some(eigen) = self.pool_trust.write().await.get_mut(&key) {
+            let success = matches!(probe_result, ProbeResult::Success(_));
             if let Some(fetcher) = eigen.get_fetcher_mut() {
                 fetcher
                     .record_interaction(self.current_node_id, node_id, success)
@@ -432,11 +445,15 @@ impl Tracker {
             
             // More gradual trust updates
             let current_trust = eigen.get_local_trust(&node_id).unwrap_or(0.5);
-            let trust_delta = if success { 0.1 } else { -0.2 }; // Failures decrease trust faster
+            let trust_delta = match probe_result {
+                ProbeResult::Success(_) => 0.5,
+                ProbeResult::Error => -1.0,
+                ProbeResult::Timeout(_) => -0.5,
+            };
             let new_trust = (current_trust + trust_delta).clamp(0.0, 1.0);
             
             // Lower weight for more stable trust values
-            eigen.update_local_trust(node_id, new_trust, 0.3);
+            eigen.update_local_trust(node_id, new_trust, 1.0);
         }
         Ok(())
     }
@@ -451,30 +468,9 @@ impl Tracker {
             .expect("valid ticket");
 
         // Reduce timeout threshold to 2 seconds
-        let probe_result = match Self::probe_node(ticket).await {
-            Ok(stats) => {
-                tracing::info!("tracker::probe_and_update_trust: probe result: {:?}", stats);
-                // More aggressive timeout threshold - now 2 seconds instead of 10
-                if stats.elapsed.as_millis() < 2000 {
-                    tracing::info!("tracker::probe_and_update_trust: success probe result: {:?}", stats);
-                    ProbeResult::Success(stats)
-                } else {
-                    tracing::info!("tracker::probe_and_update_trust: timeout probe result: {:?}", stats);
-                    ProbeResult::Timeout(stats.elapsed)
-                }
-            }
-            Err(_) => {
-                tracing::info!("tracker::probe_and_update_trust: error probe result");
-                ProbeResult::Error
-            }
-        };
-
-        // Update trust based on probe result
-        let success = matches!(probe_result, ProbeResult::Success(_));
-
-        self.update_local_trust(key.clone(), node_id, success)
+        let probe_result = Self::probe_node(ticket).await;
+        self.update_local_trust(key.clone(), node_id, probe_result.clone())
             .await?;
-
         Ok(probe_result)
     }
 
