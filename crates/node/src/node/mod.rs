@@ -85,20 +85,20 @@ impl Node {
         handles.push(iroh_handle);
 
         // Start factory event listener
-        let tracker = state.tracker().clone();
-        let mut event_rx = shutdown_rx.clone();
-        let factory_events_handle = tokio::spawn(async move {
-            // Start the factory event listener
-            if let Err(e) = tracker.start_event_listeners().await {
-                tracing::error!("Factory contract event listener error: {}", e);
-                return;
-            }
+        // let tracker = state.tracker().clone();
+        // let mut event_rx = shutdown_rx.clone();
+        // let factory_events_handle = tokio::spawn(async move {
+        //     // Start the factory event listener
+        //     if let Err(e) = tracker.start_event_listeners().await {
+        //         tracing::error!("Factory contract event listener error: {}", e);
+        //         return;
+        //     }
 
-            // Keep the task alive until shutdown signal
-            let _ = event_rx.changed().await;
-            tracing::info!("Shutting down factory contract event listener");
-        });
-        handles.push(factory_events_handle);
+        //     // Keep the task alive until shutdown signal
+        //     let _ = event_rx.changed().await;
+        //     tracing::info!("Shutting down factory contract event listener");
+        // });
+        // handles.push(factory_events_handle);
 
         let _ = graceful_waiter.await;
 

@@ -19,6 +19,7 @@ use url::Url;
 // Define event for internal communication
 #[derive(Debug, Clone)]
 pub enum FactoryEvent {
+    #[allow(dead_code)]
     PoolCreated {
         pool_address: Address,
         hash: Hash,
@@ -41,7 +42,9 @@ pub struct FactoryContract {
     ws_url: Url,
     private_key: PrivateKeySigner,
     address: Address,
+    #[allow(dead_code)]
     provider: Arc<Mutex<Arc<dyn Provider>>>,
+    #[allow(dead_code)]
     event_sender: mpsc::Sender<FactoryEvent>,
 }
 
@@ -71,6 +74,7 @@ impl FactoryContract {
         })
     }
 
+    #[allow(dead_code)]
     pub async fn listen_events(&self, shutdown_rx: watch::Receiver<()>) -> Result<()> {
         let filter = Filter::new()
             .address(self.address)

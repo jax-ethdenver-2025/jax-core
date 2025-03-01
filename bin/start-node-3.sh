@@ -3,11 +3,11 @@ set -e
 
 # Configuration
 ANVIL_PORT=8545
-NODE2_REMOTE_PORT=8081
-NODE2_ENDPOINT_PORT=3002
+NODE3_REMOTE_PORT=8082
+NODE3_ENDPOINT_PORT=3003
 
 # Test account (from Anvil's default accounts)
-NODE2_KEY="0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+NODE3_KEY="0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"
 
 # Exit if anvil is not running
 if ! nc -z localhost "$ANVIL_PORT" >/dev/null 2>&1; then
@@ -15,22 +15,22 @@ if ! nc -z localhost "$ANVIL_PORT" >/dev/null 2>&1; then
   exit 1
 fi
 
-# Clean up existing data
+# # Clean up existing data
 rm -rf ./data
 mkdir -p ./data
 
 # this should source the factory address
 source .env.local
 
-export JAX_CONFIG_PATH=./data/jax-node2
+export JAX_CONFIG_PATH=./data/jax-node3
 
 alias jax="cargo run --bin jax -- "
 
 cargo run --bin jax -- init \
   --overwrite \
   --factory-address $FACTORY_ADDRESS \
-  --eth-signer $NODE2_KEY \
-  --http-port $NODE2_REMOTE_PORT \
-  --iroh-port $NODE2_ENDPOINT_PORT
+  --eth-signer $NODE3_KEY \
+  --http-port $NODE3_REMOTE_PORT \
+  --iroh-port $NODE3_ENDPOINT_PORT
 
 cargo run --bin jax -- node

@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::str::FromStr;
 use std::sync::Arc;
 
 use alloy::primitives::{Address, U256};
@@ -13,12 +12,11 @@ use iroh_blobs::ticket::BlobTicket;
 use iroh_blobs::{Hash, HashAndFormat};
 use tokio::sync::mpsc;
 use tokio::sync::watch;
-use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use url::Url;
 
 use crate::node::eth::contracts::{
-    get_peers, FactoryContract, FactoryEvent, PoolContract, PoolEvent,
+    get_peers, FactoryContract, PoolContract,
 };
 use crate::node::iroh::BlobsService;
 
@@ -62,14 +60,9 @@ pub struct Tracker {
     eth_ws_url: Arc<Url>,
     eth_private_key: Arc<PrivateKeySigner>,
     // Track active pool listeners
-    pool_listeners: Arc<RwLock<HashSet<Address>>>,
     // Factory contract
     factory_contract: Arc<RwLock<FactoryContract>>,
     // Channels for contract events
-    factory_event_rx: Arc<Mutex<Option<mpsc::Receiver<FactoryEvent>>>>,
-    pool_event_rx: Arc<Mutex<Option<mpsc::Receiver<PoolEvent>>>>,
-    #[allow(dead_code)]
-    pool_event_tx: mpsc::Sender<PoolEvent>,
     blobs_service: Arc<BlobsService>,
     pub current_node_id: NodeId,
 }
@@ -78,8 +71,8 @@ pub struct Tracker {
 pub struct NetworkTrustFetcher {
     pool_key: PoolKey,
     peers: Arc<RwLock<HashSet<NodeId>>>,
-    // Track successful/failed interactions
-    interactions: Arc<RwLock<HashMap<(NodeId, NodeId), (u64, u64)>>>, // (successes, failures)
+    // Track successful/failed interactions with timestamps
+    interactions: Arc<RwLock<HashMap<(NodeId, NodeId), Vec<(u64, u64, std::time::SystemTime)>>>>, // (successes, failures, timestamp)
     eth_ws_url: Arc<Url>,
 }
 
@@ -95,11 +88,39 @@ impl NetworkTrustFetcher {
 
     pub async fn record_interaction(&self, from: NodeId, to: NodeId, success: bool) {
         let mut interactions = self.interactions.write().await;
-        let (successes, failures) = interactions.entry((from, to)).or_insert((0, 0));
-        if success {
-            *successes += 1;
+        let records = interactions.entry((from, to)).or_insert_with(Vec::new);
+        records.push((
+            if success { 1 } else { 0 },
+            if success { 0 } else { 1 },
+            std::time::SystemTime::now()
+        ));
+    }
+
+    async fn fetch_trust(&self, i: &NodeId, j: &NodeId) -> Result<f64> {
+        let interactions = self.interactions.read().await;
+        
+        if let Some(records) = interactions.get(&(*i, *j)) {
+            let now = std::time::SystemTime::now();
+            let mut weighted_successes = 0.0;
+            let mut weighted_failures = 0.0;
+            
+            for (successes, failures, timestamp) in records {
+                // Calculate time-based decay factor (half-life of 1 hour)
+                let elapsed = now.duration_since(*timestamp).unwrap_or_default();
+                let decay = 0.5f64.powf(elapsed.as_secs_f64() / 3600.0);
+                
+                weighted_successes += *successes as f64 * decay;
+                weighted_failures += *failures as f64 * decay;
+            }
+            
+            let total = weighted_successes + weighted_failures;
+            if total > 0.0 {
+                Ok(weighted_successes / total)
+            } else {
+                Ok(0.0)
+            }
         } else {
-            *failures += 1;
+            Ok(0.0)
         }
     }
 
@@ -117,19 +138,8 @@ impl TrustFetcher for NetworkTrustFetcher {
     type NodeId = NodeId;
 
     async fn fetch_trust(&self, i: &NodeId, j: &NodeId) -> Result<f64> {
-        let interactions = self.interactions.read().await;
-
-        // Calculate trust based on successful vs total interactions
-        if let Some((successes, failures)) = interactions.get(&(*i, *j)) {
-            let total = *successes as f64 + *failures as f64;
-            if total > 0.0 {
-                Ok(*successes as f64 / total)
-            } else {
-                Ok(0.0)
-            }
-        } else {
-            Ok(0.0)
-        }
+        // Use the new timestamp-based implementation
+        self.fetch_trust(i, j).await
     }
 
     async fn discover_peers(&self, _: &NodeId) -> Result<HashSet<NodeId>> {
@@ -164,8 +174,7 @@ impl Tracker {
         blobs_service: BlobsService,
         iroh_signature: Signature,
     ) -> Result<Self> {
-        let (factory_event_tx, factory_event_rx) = mpsc::channel(100);
-        let (pool_event_tx, pool_event_rx) = mpsc::channel(100);
+        let (factory_event_tx, _factory_event_rx) = mpsc::channel(100);
 
         let factory_contract = FactoryContract::new(
             factory_address,
@@ -181,11 +190,7 @@ impl Tracker {
             shutdown_rx: shutdown_rx.clone(),
             eth_ws_url: Arc::new(eth_ws_url),
             eth_private_key: Arc::new(eth_private_key),
-            pool_listeners: Arc::new(RwLock::new(HashSet::new())),
             factory_contract: Arc::new(RwLock::new(factory_contract)),
-            factory_event_rx: Arc::new(Mutex::new(Some(factory_event_rx))),
-            pool_event_rx: Arc::new(Mutex::new(Some(pool_event_rx))),
-            pool_event_tx,
             blobs_service: Arc::new(blobs_service),
             current_node_id: iroh_node_id,
             iroh_signature,
@@ -197,66 +202,6 @@ impl Tracker {
         });
 
         Ok(tracker)
-    }
-
-    /// Start listening for events from contracts
-    pub async fn start_event_listeners(&self) -> Result<()> {
-        // Start factory listener
-        let factory = self.factory_contract.read().await;
-        factory.listen_events(self.shutdown_rx.clone()).await?;
-
-        // Start event processor
-        let mut factory_rx = self
-            .factory_event_rx
-            .lock()
-            .await
-            .take()
-            .expect("Factory event receiver should be available");
-        let mut pool_rx = self
-            .pool_event_rx
-            .lock()
-            .await
-            .take()
-            .expect("Pool event receiver should be available");
-        let tracker = self.clone();
-        let mut shutdown_rx = self.shutdown_rx.clone();
-
-        // passively listen for new pools and peers
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    Some(event) = factory_rx.recv() => {
-                        match event {
-                            FactoryEvent::PoolCreated { pool_address, hash, balance } => {
-                                    let key = PoolKey { hash, address: pool_address };
-                                    // TODO (amiller68): handle errors here
-                                    tracker.add_pool(key, balance).await.expect("failed to add pool");
-                            }
-                        }
-                    }
-                    // NOTE (amiller68): see not in eth::contracts::pool.rs, i don't think
-                    //  we're even emitting these events
-                    Some(event) = pool_rx.recv() => {
-                        match event {
-                            PoolEvent::PeerAdded { pool_address, hash, node_id } => {
-                                if let Ok(node_id) = iroh::NodeId::from_str(&node_id) {
-                                    let key = PoolKey { hash, address: pool_address };
-                                    tracker.add_pool_peer(key, node_id).await;
-                                }
-                            },
-                            // TODO: handle deposits i guess for now we'll update via polling
-                            _ => {}
-                        }
-                    }
-                    _ = shutdown_rx.changed() => {
-                        tracing::info!("Shutting down event listeners");
-                        break;
-                    }
-                }
-            }
-        });
-
-        Ok(())
     }
 
     pub async fn create_pool(&self, hash: Hash, value: Option<U256>) -> Result<()> {
@@ -326,45 +271,11 @@ impl Tracker {
             .write()
             .await
             .insert(key.clone(), pool_eigen);
-
-        // Look up and add historical peers
-        if let Ok(peers) = get_peers(key.address, &self.eth_ws_url).await {
-            for peer in peers.clone() {
-                self.add_pool_peer(key.clone(), peer).await;
-            }
-            tracing::info!(
-                "Added {} historical peers for pool {}",
-                peers.len(),
-                key.address
-            );
-        }
-
-        // Check if we already have a listener for this pool
-        let mut listeners = self.pool_listeners.write().await;
-        if !listeners.contains(&key.address) {
-            // Create a new pool contract and start listening
-            if let Ok(pool_contract) =
-                PoolContract::new(key.address, &self.eth_ws_url, &self.eth_private_key, self).await
-            {
-                if let Ok(_) = pool_contract
-                    .listen_events(key.hash, self.shutdown_rx.clone())
-                    .await
-                {
-                    listeners.insert(key.address);
-                    tracing::info!(
-                        "Started listener for pool {} with hash {}",
-                        key.address,
-                        key.hash
-                    );
-                }
-            }
-        }
-
         Ok(())
     }
 
     pub async fn add_pool_peer(&self, key: PoolKey, node_id: NodeId) {
-        tracing::info!("Adding peer {} to pool {}", node_id, key.address);
+        tracing::info!("tracker::add_pool_peer: adding peer {} to pool {}", node_id, key.address);
         if let Some(eigen) = self.pool_trust.write().await.get_mut(&key) {
             // Add peer to the pool's trust network with zero initial trust
             if let Some(fetcher) = eigen.get_fetcher_mut() {
@@ -429,21 +340,29 @@ impl Tracker {
     }
 
     pub async fn probe_node(ticket: BlobTicket) -> Result<Stats> {
+        tracing::info!("tracker::probe_node: probing node {:?}", ticket.node_addr().node_id);
         let ephemeral_endpoint = create_ephemeral_endpoint().await;
         let hash_and_format = HashAndFormat {
             hash: ticket.hash(),
             format: ticket.format(),
         };
-
         // Add a timeout of 10 seconds
         let probe_future = probe_complete(
             &ephemeral_endpoint,
             &ticket.node_addr().node_id,
             &hash_and_format,
         );
-        match tokio::time::timeout(std::time::Duration::from_secs(2), probe_future).await {
-            Ok(result) => result,
-            Err(_) => Err(anyhow::anyhow!("Probe timed out after 2 seconds")),
+        let timeout = std::time::Duration::from_secs(3);
+        match tokio::time::timeout(timeout, probe_future).await {
+            Ok(Ok(result)) => {
+                tracing::info!("success probe result: {:?}", result);
+                Ok(result)
+            }
+            Ok(Err(e)) => {
+                tracing::info!("error probe result: {:?}", e);
+                Err(e)
+            }
+            Err(_) => Err(anyhow::anyhow!("Probe timed out after {:?} seconds", timeout)),
         }
     }
 
@@ -505,18 +424,19 @@ impl Tracker {
         success: bool,
     ) -> Result<()> {
         if let Some(eigen) = self.pool_trust.write().await.get_mut(&key) {
-            // Update trust fetcher interactions
             if let Some(fetcher) = eigen.get_fetcher_mut() {
                 fetcher
                     .record_interaction(self.current_node_id, node_id, success)
                     .await;
             }
-            // Make trust changes more dramatic
-            // Success = high trust (1.0)
-            // Failure = very low trust (0.0)
-            // Increase weight to 0.5 for faster trust changes
-            let trust_value = if success { 1.0 } else { 0.0 };
-            eigen.update_local_trust(node_id, trust_value, 0.25);
+            
+            // More gradual trust updates
+            let current_trust = eigen.get_local_trust(&node_id).unwrap_or(0.5);
+            let trust_delta = if success { 0.1 } else { -0.2 }; // Failures decrease trust faster
+            let new_trust = (current_trust + trust_delta).clamp(0.0, 1.0);
+            
+            // Lower weight for more stable trust values
+            eigen.update_local_trust(node_id, new_trust, 0.3);
         }
         Ok(())
     }
@@ -526,20 +446,27 @@ impl Tracker {
         key: PoolKey,
         node_id: NodeId,
     ) -> Result<ProbeResult> {
+        tracing::info!("tracker::probe_and_update_trust: probing node {:?} | {:?}", node_id, key.hash);
         let ticket = BlobTicket::new(node_id.into(), key.hash, iroh_blobs::BlobFormat::Raw)
             .expect("valid ticket");
 
         // Reduce timeout threshold to 2 seconds
         let probe_result = match Self::probe_node(ticket).await {
             Ok(stats) => {
+                tracing::info!("tracker::probe_and_update_trust: probe result: {:?}", stats);
                 // More aggressive timeout threshold - now 2 seconds instead of 10
                 if stats.elapsed.as_millis() < 2000 {
+                    tracing::info!("tracker::probe_and_update_trust: success probe result: {:?}", stats);
                     ProbeResult::Success(stats)
                 } else {
+                    tracing::info!("tracker::probe_and_update_trust: timeout probe result: {:?}", stats);
                     ProbeResult::Timeout(stats.elapsed)
                 }
             }
-            Err(_) => ProbeResult::Error,
+            Err(_) => {
+                tracing::info!("tracker::probe_and_update_trust: error probe result");
+                ProbeResult::Error
+            }
         };
 
         // Update trust based on probe result
@@ -553,8 +480,10 @@ impl Tracker {
 
     // Add this method to probe all nodes in a pool
     pub async fn probe_pool(&self, key: PoolKey) -> Result<()> {
+        tracing::info!("tracker::probe_pool: probing pool {:?} | {:?}", key.address, key.hash);
         let peers = self.get_pool_peers(key.clone()).await?;
         for node_id in peers {
+            tracing::info!("tracker::probe_pool: probing node {:?}", node_id);
             if let Err(e) = self.probe_and_update_trust(key.clone(), node_id).await {
                 tracing::warn!(
                     "tracker::probe_pool: failed to probe node {}: {}",
@@ -596,7 +525,7 @@ impl Tracker {
 
         // Spawn background task
         tokio::spawn(async move {
-            let update_interval = tokio::time::Duration::from_secs(5);
+            let update_interval = tokio::time::Duration::from_secs(10);
             let mut interval = tokio::time::interval(update_interval);
 
             loop {
@@ -617,6 +546,7 @@ impl Tracker {
 
     /// Update all pools - fetch new peers and recalculate trust scores
     async fn update_all_pools(&self) -> Result<()> {
+        tracing::info!("tracker::update_all_pools: updating all pools");
         // read the factory contract
         let factory = self.factory_contract.read().await;
 
@@ -625,6 +555,8 @@ impl Tracker {
 
         // add the new pools to the pool set and update the pool info
         let mut pool_info = Vec::new();
+
+        tracing::info!("tracker::update_all_pools: found {} pools", pools.len());
         for pool in pools {
             let pool_contract =
                 PoolContract::new(pool, &self.eth_ws_url, &self.eth_private_key, self).await?;
@@ -667,35 +599,46 @@ impl Tracker {
             }
         }
 
+        tracing::info!("tracker::update_all_pools: updating pool peers and trust scores");
         // update the pool peers and trust scores
         for pi in pool_info {
             let pool_key = pi.key();
             // get the current pool peers
-            let peers = self.get_pool_peers(pool_key.clone()).await?;
-            let peers_set: HashSet<_> = peers.clone().into_iter().collect();
+            let current_peers = self.get_pool_peers(pool_key.clone()).await?;
+            let current_peers_set: HashSet<_> = current_peers.clone().into_iter().collect();
             // get the historical peers
-            let peers = get_peers(pi.key().address, &self.eth_ws_url).await?;
-            let set: HashSet<_> = peers.clone().into_iter().collect();
+            let all_peers = get_peers(pi.key().address, &self.eth_ws_url).await?;
+            let all_peers_set: HashSet<_> = all_peers.clone().into_iter().collect();
             // get the new peer/
-            let new_peers = set.difference(&peers_set);
+            let new_peers = all_peers_set.difference(&current_peers_set);
             // add the new peers
+            tracing::info!("tracker::update_all_pools: new peers: {:?}", new_peers);
             for peer in new_peers {
                 self.add_pool_peer(pool_key.clone(), *peer).await;
             }
 
-            if !peers_set.contains(&self.current_node_id) {
+            if !all_peers_set.contains(&self.current_node_id) {
+                tracing::info!("tracker::update_all_pools: attempting to join pool {:?}", pool_key.address);
                 // check if you have the hash
                 let stat = self.blobs_service.get_blob_stat(pool_key.hash).await?;
                 let mut proceed = stat;
                 if !stat {
+                    tracing::info!("tracker::update_all_pools: attempting to download hash {:?}", pool_key.hash);
                     // iterate through the peers and attempt to download the hash
-                    for peer in peers.clone() {
+                    for peer in all_peers.clone() {
                         let ticket = BlobTicket::new(
                             peer.into(),
                             pool_key.hash,
                             iroh_blobs::BlobFormat::Raw,
                         )
                         .expect("valid ticket");
+                        // attempt to probe the node
+                        let probe_result = self.probe_and_update_trust(pool_key.clone(), peer).await?;
+                        if !matches!(probe_result, ProbeResult::Success(_)) {
+                            tracing::info!("tracker::update_all_pools: failed to probe node {:?}", peer);
+                            continue;
+                        }
+                        tracing::info!("tracker::update_all_pools: successfully probed node {:?}", peer);
                         if let Ok(_) = self.blobs_service.download_blob(&ticket).await {
                             proceed = true;
                             break;
@@ -703,6 +646,7 @@ impl Tracker {
                     }
                 }
                 if proceed {
+                    tracing::info!("tracker::update_all_pools: successfully downloaded (or had) hash {:?}", pool_key.hash);
                     match self.enter_pool(pool_key.clone()).await {
                         Ok(_) => {
                             tracing::info!(
@@ -731,7 +675,20 @@ impl Tracker {
                 );
             }
             // this both probes and updates trust
+            tracing::info!("tracker::update_all_pools: probing pool {:?}", pool_key.address);
             self.probe_pool(pool_key.clone()).await?;
+        }
+
+        // Add periodic trust decay
+        for (_key, eigen) in self.pool_trust.write().await.iter_mut() {
+            let peers = eigen.get_peers().clone();
+            for peer in peers {
+                if let Some(current_trust) = eigen.get_local_trust(&peer) {
+                    // Decay trust by 10% every update cycle
+                    let decayed_trust = current_trust * 0.9;
+                    eigen.update_local_trust(peer, decayed_trust, 1.0);
+                }
+            }
         }
 
         Ok(())
