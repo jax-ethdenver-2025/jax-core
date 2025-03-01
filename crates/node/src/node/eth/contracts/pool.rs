@@ -35,7 +35,7 @@ sol!(
 sol! {
     #[sol(rpc)]
     contract RewardPool {
-        function enterPool(string memory nodeId, bytes32 k, bytes32 r, bytes32 s, bytes memory m) external;
+        function enterPool(string memory nodeId, bytes32 k, bytes32 r, bytes32 s, address memory m) external;
         function getHash() external view returns (bytes32);
         function getPeers() external view returns (string[] memory);
         function getBalance() external view returns (uint256);
@@ -169,14 +169,15 @@ impl PoolContract {
             .on_ws(WsConnect::new(self.ws_url.as_str()))
             .await?;
         let contract = RewardPool::new(self.address, provider);
+        let message = self.private_key.address().into_array();
         let iroh_signature = self.iroh_signature;
         let node_id = self.tracker.current_node_id;
         let k_bytes = FixedBytes::<32>::try_from(self.tracker.current_node_id.as_bytes()).expect("Failed to convert node_id to FixedBytes");
         let r_bytes = FixedBytes::<32>::from(iroh_signature.r_bytes());
         let s_bytes = FixedBytes::<32>::from(iroh_signature.s_bytes());
-        let m_bytes = Bytes::from(self.tracker.current_node_id.as_bytes().to_vec());
+        let m = self.private_key.address();
         let tx = contract
-            .enterPool(node_id.to_string(), k_bytes, r_bytes, s_bytes, m_bytes)
+            .enterPool(node_id.to_string(), k_bytes, r_bytes, s_bytes, m)
             .send()
             .await?;
         let _receipt = tx.watch().await?;
@@ -250,14 +251,16 @@ mod test {
         let zeros = [0u8; 32];
         let secret_key = iroh::SecretKey::from_bytes(&zeros);
         let node_id = secret_key.public();
-        let signature = secret_key.sign(node_id.as_bytes());
+        let private_key: PrivateKeySigner = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".parse()?;
+        let message = private_key.address().into_array();
+        let signature = secret_key.sign(message.as_ref());
         let k_bytes = FixedBytes::<32>::try_from(node_id.as_bytes()).expect("Failed to convert node_id to FixedBytes");
         let r_bytes = FixedBytes::<32>::from(signature.r_bytes());
         let s_bytes = FixedBytes::<32>::from(signature.s_bytes());
-        let m_bytes = Bytes::from(node_id.as_bytes().to_vec());
+        let m = private_key.address();
+        // Remember to replace this line every time we redeploy factory
         let pool_address = "0x41CD982c4C291B50B2C2b3113ca4Cc7EE3e33c63".parse::<Address>()?;
         let ws_url = Url::parse("ws://localhost:8545")?;
-        let private_key: PrivateKeySigner = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".parse()?;
 
         // Create a provider
         let provider = ProviderBuilder::new()
@@ -266,16 +269,24 @@ mod test {
             .on_ws(WsConnect::new(ws_url.as_str()))
             .await?;
 
+        println!("message: {:?}", message);
         println!("k_bytes: {:?}", k_bytes);
         println!("r_bytes: {:?}", r_bytes);
         println!("s_bytes: {:?}", s_bytes);
-        println!("m_bytes: {:?}", m_bytes);
+        println!("m: {:?}", m);
 
         // Create the contract instance
         let contract = RewardPool::new(pool_address, provider);
 
         // Call the enterPool function
-        let tx = contract.enterPool(node_id.to_string(), k_bytes, r_bytes, s_bytes, m_bytes).send().await?;
+        let tx = contract.enterPool(
+            node_id.to_string(),
+            k_bytes,
+            r_bytes,
+            s_bytes,
+            m
+        ).send().await?;
+        
         let _receipt = tx.watch().await?;
 
         // Verify the peer was added

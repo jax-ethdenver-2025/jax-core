@@ -52,7 +52,9 @@ impl State {
             .await
             .map_err(StateSetupError::Default)?;
 
-        let iroh_signature = iroh_secret_key.sign(iroh_node_id.as_bytes());
+        let beneficiary_address = config.eth_signer().expect("valid eth signer").address();
+        println!("beneficiary_address: {:?}", beneficiary_address);
+        let iroh_signature = iroh_secret_key.sign(beneficiary_address.into_array().as_ref());
 
         let tracker = Tracker::new(
             shutdown_rx.clone(),

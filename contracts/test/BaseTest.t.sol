@@ -34,11 +34,11 @@ contract BaseTest is Test {
     }
 
     function test_verifySignature() public view {
-        bytes32 k = 0x06cf14cfae0ff9fe7fdf773202029a3e8976465c8919f4840d1c3c77c8162435;
-        bytes32 r = 0xa6161c95fd4e3237b7dd12cc3052aaa69382510ecb5b89c2fbeb8b6efb78266b;
-        bytes32 s = 0x81160af2842235a0257fc1d3e968c2c1c9f56f117da3186effcaeda256c38a0d;
+        bytes32 k = 0x3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29;
+        bytes32 r = 0x7aff0db8d8ae6261b6726c5d8216182554f5ba4b249687da0289c5d1afc8f6aa;
+        bytes32 s = 0xef6f50c132af4317cb2631da1f4704a64ebdbc902528d160c25e289bbd8c650c;
         bytes memory m =
-            hex"b0d8bdfd9f4d1023dae836b2e41da5019d20c60965dc40943e2c10f2ad4ee49ab0d8bdfd9f4d1023dae836b2e41da5019d20c60965dc";
+            hex"f39fd6e51aad88f6f4ce6ab8827279cfffb92266";
         bool verification = pool.verify(k, r, s, m);
         assertEq(verification, true);
     }
@@ -62,10 +62,9 @@ contract BaseTest is Test {
     function test_validPoolEntrance() public {
         string memory nodeId = "node1";
         bytes32 k = 0x3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29;
-        bytes32 r = 0x63145222a1f366ce657e65989b4f7074a4bc4093d2ba71ff1a3b72fcc40de4f4;
-        bytes32 s = 0x3707e1e40de32db295cb584f6a6f060f19c35dd69046686a560315b5d25e9106;
-        bytes memory m =
-            hex"63145222a1f366ce657e65989b4f7074a4bc4093d2ba71ff1a3b72fcc40de4f43707e1e40de32db295cb584f6a6f060f19c35dd69046686a560315b5d25e9106";
+        bytes32 r = 0x7aff0db8d8ae6261b6726c5d8216182554f5ba4b249687da0289c5d1afc8f6aa;
+        bytes32 s = 0xef6f50c132af4317cb2631da1f4704a64ebdbc902528d160c25e289bbd8c650c;
+        address m = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
         pool.enterPool(nodeId, k, r, s, m);
 
         string[] memory peers = pool.getPeers();
