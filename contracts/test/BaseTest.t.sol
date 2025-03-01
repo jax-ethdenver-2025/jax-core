@@ -19,9 +19,9 @@ contract BaseTest is Test {
         avs = new AVSMock();
         factory = new Factory(poolImplementation, address(avs));
 
-        bytes memory h = hex"b0d8bdfd9f4d1023dae836b2e41da5019d20c60965dc40943e2c10f2ad4ee49ab0d8bdfd9f4d1023dae836b2e41da5019d20c60965dc";
+        bytes32 h = 0xfe817b5da668b5b0576b6f1fda0e8a3cbe2546e551447c780f8f606b994ad514;
 
-        pool = RewardPool(factory.createPool{value: 1 ether}(string(h)));
+        pool = RewardPool(factory.createPool{value: 1 ether}(h));
     }
 
     function test_poolExists() public view {
@@ -48,28 +48,15 @@ contract BaseTest is Test {
 
     function test_deposit() public {
         uint256 depositAmount = 1 ether;
+        uint256 targetAmount = 2 ether;
         vm.deal(user, depositAmount);
         
         vm.prank(user);
         pool.deposit{value: depositAmount}();
         
-        assertEq(pool.balances(user), depositAmount);
+        assertEq(pool.getBalance(), targetAmount);
     }
-
-    function test_setBountyPerEpoch() public {
-        uint256 bounty = 1 ether;
-        vm.prank(pool.owner());
-        pool.setBountyPerEpoch(bounty);
-        
-        assertEq(pool.bountyPerEpoch(), bounty);
-    }
-
-    function test_revertIfNotOWnerSetBounty() public {
-        vm.prank(makeAddr("notOwner"));
-        vm.expectRevert();
-        pool.setBountyPerEpoch(1 ether);
-    }
-
+    
     function test_validPoolEntrance() public {
         string memory nodeId = "node1";
         bytes32 k = 0x06cf14cfae0ff9fe7fdf773202029a3e8976465c8919f4840d1c3c77c8162435;
@@ -79,7 +66,7 @@ contract BaseTest is Test {
         Signature memory signature = Signature(k, r, s, m);
         pool.enterPool(nodeId, signature);
 
-        string[] memory peers = pool.getAllPeers();
+        string[] memory peers = pool.getPeers();
         assertEq(peers.length, 1);
         assertEq(peers[0], nodeId);
     }

@@ -10,9 +10,8 @@ pub fn router(state: NodeState) -> Router<NodeState> {
         .route("/", get(handlers::index_handler))
         .route("/blobs", get(handlers::blobs_handler))
         .route("/pools", get(handlers::pools_handler))
-        .route("/share", get(handlers::share_form_handler))
-        .route("/probe", get(handlers::probe_form_handler))
-        .route("/query", get(handlers::query_form_handler))
+        .route("/share", get(handlers::share_handler))
+        .route("/query", get(handlers::query_handler))
         .with_state(state)
         // TODO: make this configurable
         .nest_service("/static", ServeDir::new("crates/node/static"))

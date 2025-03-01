@@ -57,16 +57,14 @@ impl State {
         let tracker = Tracker::new(
             shutdown_rx.clone(),
             config.eth_ws_rpc_url().clone(),
+            config.factory_contract_address(),
             iroh_node_id,
             config.eth_signer().expect("valid eth signer"),
             blobs_service.clone(),
             iroh_signature,
         )
+        .await
         .expect("valid tracker");
-
-        // Initialize the factory contract
-        let factory_address = config.factory_contract_address();
-        tracker.init_factory(factory_address).await?;
 
         // Create state with all components
         let state = Self {
@@ -84,8 +82,8 @@ impl State {
         let node_id = self.iroh_node_id();
         let secret_key = &self.iroh_secret_key;
         let node_id_bytes = node_id.as_bytes();
-        let signature = secret_key.sign(node_id_bytes);
-        signature
+        
+        secret_key.sign(node_id_bytes)
     }
 
     pub fn iroh_node_id(&self) -> NodeId {

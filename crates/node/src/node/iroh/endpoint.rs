@@ -14,14 +14,14 @@ pub async fn create_ephemeral_endpoint() -> Endpoint {
         .expect("failed to build mainline discovery");
 
     // Create the endpoint with our key and discovery
-    let endpoint = Endpoint::builder()
+    
+
+    Endpoint::builder()
         .discovery(Box::new(mainline_discovery))
         .bind_addr_v4(addr)
         .bind()
         .await
-        .expect("failed to bind ephemeral endpoint");
-
-    endpoint
+        .expect("failed to bind ephemeral endpoint")
 }
 
 pub async fn create_endpoint(socket_addr: SocketAddr, secret_key: SecretKey) -> Endpoint {
@@ -41,15 +41,15 @@ pub async fn create_endpoint(socket_addr: SocketAddr, secret_key: SecretKey) -> 
         .expect("failed to build mainline discovery");
 
     // Create the endpoint with our key and discovery
-    let endpoint = Endpoint::builder()
+    
+
+    Endpoint::builder()
         .secret_key(secret_key)
         .discovery(Box::new(mainline_discovery))
         .bind_addr_v4(addr)
         .bind()
         .await
-        .expect("failed to bind ephemeral endpoint");
-
-    endpoint
+        .expect("failed to bind ephemeral endpoint")
 }
 
 // Helper to wait for DERP relay assignment (optional)

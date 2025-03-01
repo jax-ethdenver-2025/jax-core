@@ -1,22 +1,18 @@
-use alloy::primitives::{Address, U256};
+use alloy::primitives::U256;
 use askama::Template;
 use askama_axum::IntoResponse;
 use axum::extract::State;
-use iroh::NodeId;
 
 use crate::node::State as NodeState;
 
 #[derive(Template)]
-#[template(path = "index.html")]
-struct IndexTemplate {
-    node_id: NodeId,
-    eth_address: Address,
+#[template(path = "share.html")]
+pub struct ShareTemplate {
+    message: Option<String>,
     eth_balance: U256,
 }
 
-#[axum::debug_handler]
-pub async fn index_handler(State(state): State<NodeState>) -> impl IntoResponse {
-    let node_id = state.iroh_node_id();
+pub async fn share_handler(State(state): State<NodeState>) -> impl IntoResponse {
     let eth_address = state.eth_address();
     let tracker = state.tracker();
     let eth_balance = tracker
@@ -24,9 +20,8 @@ pub async fn index_handler(State(state): State<NodeState>) -> impl IntoResponse 
         .await
         .expect("failed to get balance");
 
-    IndexTemplate {
-        node_id,
-        eth_address,
+    ShareTemplate {
+        message: None,
         eth_balance,
     }
 }

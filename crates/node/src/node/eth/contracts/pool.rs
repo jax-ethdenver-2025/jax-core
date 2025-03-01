@@ -1,7 +1,7 @@
 use std::collections::HashSet;
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
-use alloy::primitives::{Bytes, FixedBytes};
+use alloy::primitives::{Bytes, FixedBytes, U256};
 use alloy::{
     eips::BlockNumberOrTag,
     network::EthereumWallet,
@@ -17,6 +17,7 @@ use anyhow::Result;
 use ed25519::Signature as Ed25519Signature;
 use futures_util::StreamExt;
 use iroh::NodeId;
+use iroh_blobs::Hash;
 use tokio::sync::{watch, Mutex};
 use url::Url;
 
@@ -25,6 +26,7 @@ use crate::node::tracker::Tracker;
 // Define the PeerAdded event
 sol!(
     event PeerAdded(string nodeId);
+    event Deposit(uint256 amount, bytes32 hash);
 );
 
 // TODO: make this use the sol file
@@ -41,10 +43,10 @@ sol! {
     #[sol(rpc)]
     contract RewardPool {
         function enterPool(string memory nodeId, Signature memory signature) external;
-        function getHash() external view returns (string memory);
-        function getAllPeers() external view returns (string[] memory);
+        function getHash() external view returns (bytes32);
+        function getPeers() external view returns (string[] memory);
+        function getBalance() external view returns (uint256);
         function deposit() external payable;
-        function setBountyPerEpoch(uint256 amount) external;
     }
 }
 
@@ -59,14 +61,20 @@ pub struct PoolContract {
     iroh_signature: Ed25519Signature,
 }
 
+#[allow(dead_code)]
+// NOTE (amiller68): not even used, see not below on event listener
 // Define event for internal communication
 #[derive(Debug, Clone)]
 pub enum PoolEvent {
-    #[allow(dead_code)]
     PeerAdded {
         pool_address: Address,
-        hash: iroh_blobs::Hash,
+        hash: Hash,
         node_id: String,
+    },
+    Deposit {
+        pool_address: Address,
+        hash: Hash,
+        amount: U256,
     },
 }
 
@@ -93,18 +101,14 @@ impl PoolContract {
             private_key: private_key.clone(),
             provider: Arc::new(Mutex::new(provider)),
             tracker: tracker.clone(),
-            iroh_signature: tracker.iroh_signature.clone(),
+            iroh_signature: tracker.iroh_signature,
         })
     }
 
     // TODO: create a pool
 
     // TODO: get this hooked up to handlers
-    pub async fn listen_events(
-        &self,
-        hash: iroh_blobs::Hash,
-        shutdown_rx: watch::Receiver<()>,
-    ) -> Result<()> {
+    pub async fn listen_events(&self, hash: Hash, shutdown_rx: watch::Receiver<()>) -> Result<()> {
         let filter = Filter::new()
             .address(self.address)
             .from_block(BlockNumberOrTag::Latest);
@@ -119,6 +123,12 @@ impl PoolContract {
         let pool_hash = hash;
         let mut shutdown = shutdown_rx;
 
+        // TODO: i think the original design for this assumed i was sending pool messages
+        //  over an event channel but it doesn't look like cursor actually implemented that pattern ...
+        //  we should fix this and get on event channels
+        // Yeah i really gotta unmess this up because its kinda trash and makes no sense
+        //  like the ideas are so screwed up -- we should be emitting events and letting the tracker
+        //  manage its own state. For now this will write directly to the tracker
         tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -135,6 +145,16 @@ impl PoolContract {
                                 tracker.add_pool_peer(key, node_id).await;
                                 tracing::info!("Added peer {} to pool {}", node_id, pool_address);
                             }
+                        } else if let Ok(event) = Deposit::decode_log(&primitive_log, true) {
+                            // NOTE (amiller68): this is actually just screwing with the frontend and local state
+                            //  just trace it for now
+                            let amount = event.amount;
+                            // let key = PoolKey {
+                            //     hash: pool_hash,
+                            //     address: pool_address,
+                            // };
+                            // tracker.add_pool_deposit(key, amount).await;
+                            tracing::info!("Added deposit {} to pool {}", amount, pool_address);
                         }
                     }
                     _ = shutdown.changed() => {
@@ -156,8 +176,8 @@ impl PoolContract {
             .on_ws(WsConnect::new(self.ws_url.as_str()))
             .await?;
         let contract = RewardPool::new(self.address, provider);
-        let iroh_signature = self.iroh_signature.clone();
-        let node_id = self.tracker.current_node_id.clone();
+        let iroh_signature = self.iroh_signature;
+        let node_id = self.tracker.current_node_id;
         let k_bytes = self.tracker.current_node_id.as_bytes();
         let r_bytes = iroh_signature.r_bytes();
         let s_bytes = iroh_signature.s_bytes();
@@ -176,6 +196,28 @@ impl PoolContract {
         Ok(())
     }
 
+    pub async fn get_balance(&self) -> Result<U256> {
+        let provider = ProviderBuilder::new()
+            .with_chain(alloy_chains::NamedChain::AnvilHardhat)
+            .on_ws(WsConnect::new(self.ws_url.as_str()))
+            .await?;
+        let contract = RewardPool::new(self.address, provider);
+        let balance = contract.getBalance().call().await?._0;
+        Ok(balance)
+    }
+
+    pub async fn deposit(&self, amount: U256) -> Result<()> {
+        let provider = ProviderBuilder::new()
+            .with_chain(alloy_chains::NamedChain::AnvilHardhat)
+            .wallet(EthereumWallet::from(self.private_key.clone()))
+            .on_ws(WsConnect::new(self.ws_url.as_str()))
+            .await?;
+        let contract = RewardPool::new(self.address, provider);
+        let tx = contract.deposit().value(amount).send().await?;
+        let _receipt = tx.watch().await?;
+        Ok(())
+    }
+
     pub async fn get_hash(&self) -> Result<iroh_blobs::Hash> {
         let provider = ProviderBuilder::new()
             .with_chain(alloy_chains::NamedChain::AnvilHardhat)
@@ -183,26 +225,12 @@ impl PoolContract {
             .on_ws(WsConnect::new(self.ws_url.as_str()))
             .await?;
         let contract = RewardPool::new(self.address, provider);
-        let hash = contract.getHash().call().await?._0;
-        let hash = iroh_blobs::Hash::from_str(&hash)?;
+        let hash_fixed_bytes = contract.getHash().call().await?._0;
+        let hash_vec = hash_fixed_bytes.as_slice().to_vec();
+        let mut hash_bytes = [0u8; 32];
+        hash_bytes.copy_from_slice(hash_vec.as_slice());
+        let hash = Hash::from_bytes(hash_bytes);
         Ok(hash)
-    }
-
-    pub async fn get_peers(&self) -> Result<Vec<NodeId>> {
-        let provider = ProviderBuilder::new()
-            .with_chain(alloy_chains::NamedChain::AnvilHardhat)
-            .wallet(EthereumWallet::from(self.private_key.clone()))
-            .on_ws(WsConnect::new(self.ws_url.as_str()))
-            .await?;
-        let contract = RewardPool::new(self.address, provider);
-        let peers = contract.getAllPeers().call().await?._0;
-        let mut peer_set = HashSet::new();
-        for peer in peers {
-            if let Ok(node_id) = peer.parse::<NodeId>() {
-                peer_set.insert(node_id);
-            }
-        }
-        Ok(peer_set.into_iter().collect())
     }
 }
 
@@ -213,7 +241,7 @@ pub async fn get_peers(address: Address, ws_url: &Url) -> Result<HashSet<NodeId>
         .on_ws(WsConnect::new(ws_url.as_str()))
         .await?;
     let contract = RewardPool::new(address, provider);
-    let peers = contract.getAllPeers().call().await?._0;
+    let peers = contract.getPeers().call().await?._0;
     let mut peer_set = HashSet::new();
     for peer in peers {
         if let Ok(node_id) = peer.parse::<NodeId>() {

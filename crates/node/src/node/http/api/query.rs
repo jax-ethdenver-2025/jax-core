@@ -28,12 +28,15 @@ pub async fn handler(
         .blobs_service()
         .get_inner_blobs()
         .client()
-        .status(hash.clone())
+        .status(hash)
         .await?;
     let local = matches!(blob_status, BlobStatus::Complete { .. });
 
     let nodes = match trust_scores {
-        Some(scores) => scores.iter().map(|(key, score)| (*key, *score)).collect::<Vec<_>>(),
+        Some(scores) => scores
+            .iter()
+            .map(|(key, score)| (*key, *score))
+            .collect::<Vec<_>>(),
         None => vec![],
     };
     let response = QueryLocationsResponse {

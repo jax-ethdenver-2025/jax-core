@@ -1,28 +1,171 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container">
-    <h1>Share Content</h1>
-    
-    {% if let Some(msg) = message %}
-        <div class="message">{{ msg }}</div>
-    {% endif %}
-    
-    <form id="share-form" class="form">
-        <div class="form-group">
-            <label for="path">File Path:</label>
-            <input type="text" id="path" name="path" required>
+<div class="page-container">
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-share-alt"></i>
+            <h2>Share Content</h2>
         </div>
         
-        <div class="form-group">
-            <label for="create_pool">
-                <input type="checkbox" id="create_pool" name="create_pool">
-                Create Pool
-            </label>
-        </div>
+        {% if let Some(msg) = message %}
+            <div class="message">{{ msg }}</div>
+        {% endif %}
         
-        <button type="submit">Share</button>
-    </form>
-    <div id="share-message"></div>
+        <form id="share-form">
+            <div class="share-form-content">
+                <div class="form-group inline-form">
+                    <input type="text" 
+                           id="path" 
+                           name="path" 
+                           class="form-control"
+                           placeholder="Enter file path..."
+                           required>
+                           
+                    <label class="custom-checkbox">
+                        <input type="checkbox" id="create_pool" name="create_pool">
+                        <span class="checkbox-mark"></span>
+                        <span class="checkbox-label">Create Pool</span>
+                    </label>
+
+                    <button type="submit" class="button button-primary">
+                        <i class="fas fa-upload"></i>
+                        Share File
+                    </button>
+                </div>
+            </div>
+        </form>
+        <div id="share-message"></div>
+    </div>
 </div>
+
+<style>
+.share-form-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.inline-form {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 0;
+    width: 100%;
+}
+
+.inline-form .form-control {
+    flex: 1;
+}
+
+/* Custom checkbox styling */
+.custom-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    white-space: nowrap;
+}
+
+.custom-checkbox input[type="checkbox"] {
+    display: none;
+}
+
+.checkbox-mark {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 1px solid var(--primary);
+    border-radius: 0.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.checkbox-mark::after {
+    content: '\f00c';
+    font-family: 'Font Awesome 5 Free';
+    font-weight: 900;
+    color: var(--background);
+    font-size: 0.75rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.custom-checkbox input[type="checkbox"]:checked + .checkbox-mark {
+    background: var(--primary);
+}
+
+.custom-checkbox input[type="checkbox"]:checked + .checkbox-mark::after {
+    opacity: 1;
+}
+
+.checkbox-label {
+    color: var(--primary);
+    font-size: 0.875rem;
+}
+
+#share-message {
+    margin-top: 1rem;
+}
+
+#share-message.success {
+    color: #6EE7B7;
+}
+
+#share-message.error {
+    color: #EF4444;
+}
+</style>
+
+<script>
+function _showMessage(message, isError = false) {
+    const el = document.getElementById('share-message');
+    el.textContent = message;
+    el.className = isError ? 'error' : 'success';
+}
+
+document.getElementById('share-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const path = e.target.path.value;
+    const createPool = e.target.create_pool.checked;
+
+    try {
+        // Share the file
+        const shareRes = await fetch('/api/v0/share', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ path })
+        });
+        const shareData = await shareRes.json();
+
+        if (!shareRes.ok) throw new Error(shareData.error);
+
+        let message = `File shared successfully!\nHash: ${shareData.hash}`;
+
+        // Create pool if requested
+        if (createPool) {
+            const poolRes = await fetch('/api/v0/pool', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ 
+                    hash: shareData.hash,
+                    initial_value: 0
+                })
+            });
+            const poolData = await poolRes.json();
+
+            if (!poolRes.ok) throw new Error(poolData.error);
+            message += '\nPool created successfully!';
+        }
+
+        _showMessage(message);
+        e.target.reset();
+    } catch (err) {
+        _showMessage(err.message, true);
+    }
+});
+</script>
 {% endblock %} 
