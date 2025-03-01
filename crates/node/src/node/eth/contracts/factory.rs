@@ -3,7 +3,7 @@ use std::sync::Arc;
 use alloy::{
     eips::BlockNumberOrTag,
     network::EthereumWallet,
-    primitives::{Address, Bytes, FixedBytes, Log, U256},
+    primitives::{Address, FixedBytes, Log, U256},
     providers::{Provider, ProviderBuilder, WsConnect},
     rpc::types::Filter,
     signers::local::PrivateKeySigner,
@@ -37,7 +37,7 @@ sol! {
     contract Factory {
         function getAllPools() external view returns (address[] memory);
         function createPool(bytes32 hash) external payable returns (address poolAddress);
-        function createNewTask(bytes32 fileHash, uint32 quorumThresholdPercentage, bytes calldata quorumNumbers) external;
+        function queueFileHash(bytes32 fileHash) external;
     }
 }
 
@@ -172,11 +172,8 @@ impl FactoryContract {
         let factory = Factory::new(self.address, provider);
         let hash_bytes = hash.as_bytes();
         let hash_fixed_bytes = FixedBytes::from_slice(hash_bytes);
-        // TODO: real numbers
-        let qurum_threshold_percentage = 100;
-        let quorum_numbers = Bytes::from_static(&[100]);
         let tx = factory
-            .createNewTask(hash_fixed_bytes, qurum_threshold_percentage, quorum_numbers)
+            .queueFileHash(hash_fixed_bytes)
             .send()
             .await?;
         let _receipt = tx.watch().await?;

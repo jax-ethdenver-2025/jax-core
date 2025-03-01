@@ -107,12 +107,12 @@ impl NetworkTrustFetcher {
             let mut weighted_failures = 0.0;
             
             for (successes, failures, timestamp) in records {
-                // Calculate time-based decay factor (half-life of 1 hour)
+                // More aggressive time-based decay (half-life of 10 minutes)
                 let elapsed = now.duration_since(*timestamp).unwrap_or_default();
-                let decay = 0.5f64.powf(elapsed.as_secs_f64() / 3600.0);
+                let decay = 0.5f64.powf(elapsed.as_secs_f64() / 600.0); // Changed from 3600 to 600
                 
                 weighted_successes += *successes as f64 * decay;
-                weighted_failures += *failures as f64 * decay;
+                weighted_failures += *failures as f64 * decay * 2.0; // Double weight for failures
             }
             
             let total = weighted_successes + weighted_failures;
@@ -446,17 +446,17 @@ impl Tracker {
                     .await;
             }
             
-            // More gradual trust updates
+            // More aggressive trust updates
             let current_trust = eigen.get_local_trust(&node_id).unwrap_or(0.5);
             let trust_delta = match probe_result {
-                ProbeResult::Success(_) => 0.5,
-                ProbeResult::Error => -1.0,
-                ProbeResult::Timeout(_) => -0.5,
+                ProbeResult::Success(_) => 0.2,
+                ProbeResult::Error => -0.9,
+                ProbeResult::Timeout(_) => -0.8,
             };
             let new_trust = (current_trust + trust_delta).clamp(0.0, 1.0);
             
-            // Lower weight for more stable trust values
-            eigen.update_local_trust(node_id, new_trust, 1.0);
+            // Higher weight for faster trust updates
+            eigen.update_local_trust(node_id, new_trust, 0.8); // Increased weight
         }
         Ok(())
     }
@@ -688,14 +688,14 @@ impl Tracker {
             self.probe_pool(pool_key.clone()).await?;
         }
 
-        // Add periodic trust decay
+        // Add more aggressive periodic trust decay
         for (_key, eigen) in self.pool_trust.write().await.iter_mut() {
             let peers = eigen.get_peers().clone();
             for peer in peers {
                 if let Some(current_trust) = eigen.get_local_trust(&peer) {
-                    // Decay trust by 10% every update cycle
-                    let decayed_trust = current_trust * 0.9;
-                    eigen.update_local_trust(peer, decayed_trust, 1.0);
+                    // Much stronger decay - 30% every update cycle
+                    let decayed_trust = current_trust * 0.7;
+                    eigen.update_local_trust(peer, decayed_trust, 0.9);
                 }
             }
         }
