@@ -82,7 +82,7 @@ contract RewardPool is Ownable {
     }
 
     function getHash() external view returns (bytes32) {
-        return hash;
+        return contentHash;
     }
 
     function getBalance() external view returns (uint256) {
