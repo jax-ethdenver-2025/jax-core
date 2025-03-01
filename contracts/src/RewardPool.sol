@@ -58,11 +58,10 @@ contract RewardPool is Ownable {
     /* state changing functions */
 
     // TODO: fix this / diagnose why we revert against rust bindings
-    function enterPool(string memory nodeId, Signature memory signature) external whenInitialized {
+    function enterPool(string memory nodeId, bytes32 k, bytes32 r, bytes32 s, bytes memory m ) external whenInitialized {
         require(!peers[nodeId], "Peer already in pool");
         require(bytes(nodeId).length > 0, "Invalid node ID");
-        // TODO: add signature verification again
-        // require(verify(signature.k, signature.r, signature.s, signature.m), "Invalid signature");
+        require(verify(k, r, s, m), "Invalid signature");
         peers[nodeId] = true;
         peerList.push(nodeId);
         emit PeerAdded(nodeId);

@@ -3578,6 +3578,7 @@ dependencies = [
  "ed25519",
  "futures",
  "futures-util",
+ "hex",
  "http 1.2.0",
  "iroh",
  "iroh-base",

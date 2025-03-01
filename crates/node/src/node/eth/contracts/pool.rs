@@ -14,6 +14,7 @@ use alloy::{
     sol_types::SolEvent,
 };
 use anyhow::Result;
+use ed25519::signature::digest::consts::N32;
 use ed25519::Signature as Ed25519Signature;
 use futures_util::StreamExt;
 use iroh::NodeId;
@@ -33,16 +34,8 @@ sol!(
 // Define the RewardPool contract interface
 sol! {
     #[sol(rpc)]
-    struct Signature {
-        bytes32 k;
-        bytes32 r;
-        bytes32 s;
-        bytes m;
-    }
-
-    #[sol(rpc)]
     contract RewardPool {
-        function enterPool(string memory nodeId, Signature memory signature) external;
+        function enterPool(string memory nodeId, bytes32 k, bytes32 r, bytes32 s, bytes memory m) external;
         function getHash() external view returns (bytes32);
         function getPeers() external view returns (string[] memory);
         function getBalance() external view returns (uint256);
@@ -178,18 +171,12 @@ impl PoolContract {
         let contract = RewardPool::new(self.address, provider);
         let iroh_signature = self.iroh_signature;
         let node_id = self.tracker.current_node_id;
-        let k_bytes = self.tracker.current_node_id.as_bytes();
-        let r_bytes = iroh_signature.r_bytes();
-        let s_bytes = iroh_signature.s_bytes();
-        let m_bytes = iroh_signature.to_bytes();
-        let signature = Signature {
-            k: FixedBytes::from_slice(k_bytes),
-            r: FixedBytes::from_slice(r_bytes),
-            s: FixedBytes::from_slice(s_bytes),
-            m: Bytes::copy_from_slice(&m_bytes),
-        };
+        let k_bytes = FixedBytes::<32>::try_from(self.tracker.current_node_id.as_bytes()).expect("Failed to convert node_id to FixedBytes");
+        let r_bytes = FixedBytes::<32>::from(iroh_signature.r_bytes());
+        let s_bytes = FixedBytes::<32>::from(iroh_signature.s_bytes());
+        let m_bytes = Bytes::from(self.tracker.current_node_id.as_bytes().to_vec());
         let tx = contract
-            .enterPool(node_id.to_string(), signature)
+            .enterPool(node_id.to_string(), k_bytes, r_bytes, s_bytes, m_bytes)
             .send()
             .await?;
         let _receipt = tx.watch().await?;
@@ -249,4 +236,52 @@ pub async fn get_peers(address: Address, ws_url: &Url) -> Result<HashSet<NodeId>
         }
     }
     Ok(peer_set)
+}
+
+mod test {
+    use super::*;
+    use alloy::signers::local::LocalWallet;
+    use tokio::sync::watch;
+    use url::Url;
+
+    #[tokio::test]
+    async fn test_enter_pool() -> Result<()> {
+        // Setup test parameters
+        let zeros = [0u8; 32];
+        let secret_key = iroh::SecretKey::from_bytes(&zeros);
+        let node_id = secret_key.public();
+        let signature = secret_key.sign(node_id.as_bytes());
+        let k_bytes = FixedBytes::<32>::try_from(node_id.as_bytes()).expect("Failed to convert node_id to FixedBytes");
+        let r_bytes = FixedBytes::<32>::from(signature.r_bytes());
+        let s_bytes = FixedBytes::<32>::from(signature.s_bytes());
+        let m_bytes = Bytes::from(node_id.as_bytes().to_vec());
+        let pool_address = "0x41CD982c4C291B50B2C2b3113ca4Cc7EE3e33c63".parse::<Address>()?;
+        let ws_url = Url::parse("ws://localhost:8545")?;
+        let private_key: PrivateKeySigner = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".parse()?;
+
+        // Create a provider
+        let provider = ProviderBuilder::new()
+            .with_chain(alloy_chains::NamedChain::AnvilHardhat)
+            .wallet(EthereumWallet::from(private_key.clone()))
+            .on_ws(WsConnect::new(ws_url.as_str()))
+            .await?;
+
+        println!("k_bytes: {:?}", k_bytes);
+        println!("r_bytes: {:?}", r_bytes);
+        println!("s_bytes: {:?}", s_bytes);
+        println!("m_bytes: {:?}", m_bytes);
+
+        // Create the contract instance
+        let contract = RewardPool::new(pool_address, provider);
+
+        // Call the enterPool function
+        let tx = contract.enterPool(node_id.to_string(), k_bytes, r_bytes, s_bytes, m_bytes).send().await?;
+        let _receipt = tx.watch().await?;
+
+        // Verify the peer was added
+        let peers = contract.getPeers().call().await?._0;
+        assert!(peers.contains(&node_id.to_string()));
+
+        Ok(())
+    }
 }

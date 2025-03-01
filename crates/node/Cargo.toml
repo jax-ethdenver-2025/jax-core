@@ -10,6 +10,10 @@ crate-type = ["cdylib", "rlib"]
 name = "hash_convert"
 path = "bin/hash_convert.rs"
 
+[[bin]]
+name = "example_sig"
+path = "bin/example_sig.rs"
+
 [dependencies]
 jax-eigen-trust = { path = "../eigen-trust" }
 
@@ -84,3 +88,4 @@ alloy = { version = "0.11", features = [
 futures-util = "0.3.31"
 alloy-chains = "0.1.63"
 ed25519 = "2.2.3"
+hex = "0.4.3"
