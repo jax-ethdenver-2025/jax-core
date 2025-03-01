@@ -70,7 +70,7 @@ contract RewardPool is Ownable {
 
     function deposit() external payable whenInitialized {
         require(msg.value > 0, "Invalid amount");
-        emit Deposit(msg.value, hash);
+        emit Deposit(msg.value, contentHash);
     }
 
     // TODO: distribute rewards and interface with the avs
