@@ -56,6 +56,7 @@ pub struct PoolContract {
     ws_url: Url,
     private_key: PrivateKeySigner,
     address: Address,
+    #[allow(dead_code)]
     provider: Arc<Mutex<Arc<dyn Provider>>>,
     tracker: Tracker,
     iroh_signature: Ed25519Signature,
@@ -108,6 +109,7 @@ impl PoolContract {
     // TODO: create a pool
 
     // TODO: get this hooked up to handlers
+    #[allow(dead_code)]
     pub async fn listen_events(&self, hash: Hash, shutdown_rx: watch::Receiver<()>) -> Result<()> {
         let filter = Filter::new()
             .address(self.address)

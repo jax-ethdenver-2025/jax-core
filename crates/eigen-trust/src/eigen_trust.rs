@@ -295,4 +295,8 @@ where
     pub fn get_fetcher_mut(&mut self) -> Option<&mut F> {
         Some(&mut self.trust_fetcher)
     }
+
+    pub fn get_local_trust(&self, node_id: &F::NodeId) -> Option<f64> {
+        self.local_trust.get(node_id).copied()
+    }
 }
