@@ -3,9 +3,8 @@ pragma solidity ^0.8.28;
 
 import {ERC20} from "solady/tokens/ERC20.sol";
 import {Ownable} from "solady/auth/Ownable.sol";
-import {IAVS} from "./interface/IAVS.sol";
 import {Ed25519} from "./libraries/ED25519.sol";
-
+import {IIncredibleSquaringTaskManager} from "./interface/IIncredibleSquaringTaskManager.sol";
 struct Signature {
     bytes32 k;
     bytes32 r;
@@ -14,10 +13,10 @@ struct Signature {
 }
 
 contract RewardPool is Ownable {
-    IAVS public avs;
+    IIncredibleSquaringTaskManager public avs;
 
     // Add storage for pool metadata
-    bytes32 public hash;
+    bytes32 public contentHash;
 
     // Storage for historical peers
     mapping(string => bool) public peers;
@@ -43,8 +42,8 @@ contract RewardPool is Ownable {
         require(!initialized, "Already initialized");
 
         initialized = true;
-        hash = _hash;
-        avs = IAVS(_avs);
+        contentHash = _hash;
+        avs = IIncredibleSquaringTaskManager(_avs);
 
         emit Deposit(msg.value, _hash);
     }
@@ -95,9 +94,7 @@ contract RewardPool is Ownable {
         return Ed25519.verify(k, r, s, m);
     }
 
-    /* avs interaction */
-
-    function getWalletProviders() public view returns (address[] memory) {
-        return avs.getWalletProviders();
+    function getTaskResponse(uint32 taskIndex) public view returns (IIncredibleSquaringTaskManager.TaskResponse memory) {
+        return avs.getTaskResponse(taskIndex);
     }
 }
