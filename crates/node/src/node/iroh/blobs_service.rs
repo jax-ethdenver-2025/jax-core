@@ -1,6 +1,9 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use bytes::Bytes;
+use futures::Stream;
 use iroh::Endpoint;
 use iroh_blobs::rpc::client::blobs::{BlobStatus, Reader};
+use iroh_blobs::util::SetTagOption;
 use iroh_blobs::{net_protocol::Blobs, store::fs::Store, ticket::BlobTicket, Hash};
 use std::path::Path;
 use std::sync::Arc;
@@ -19,6 +22,23 @@ impl BlobsService {
         Ok(Self {
             blobs: Arc::new(blobs),
         })
+    }
+
+    /// Store a stream as a blob
+    pub async fn store_stream(
+        &self,
+        stream: impl Stream<Item = std::io::Result<Bytes>> + Send + Unpin + 'static,
+    ) -> Result<Hash> {
+        let outcome = self
+            .blobs
+            .client()
+            .add_stream(stream, SetTagOption::Auto)
+            .await
+            .map_err(|e| anyhow!(e))?
+            .finish()
+            .await
+            .map_err(|e| anyhow!(e))?;
+        Ok(outcome.hash)
     }
 
     /// Store a blob with the given format

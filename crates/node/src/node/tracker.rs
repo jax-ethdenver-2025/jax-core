@@ -273,7 +273,6 @@ impl Tracker {
     pub async fn set_pool_balance(&self, key: PoolKey, amount: U256) {
         let mut pools = self.pools.write().await;
         pools.insert(key, amount);
-        
     }
 
     pub async fn add_pool_deposit(&self, key: PoolKey, amount: U256) {
@@ -284,7 +283,6 @@ impl Tracker {
         } else {
             tracing::warn!("node::tracker::: attempted to up deposit state of non-extant pool");
         }
-        
     }
 
     /// NOTE (amiller68): this is a janky place to put this, but it's convenient

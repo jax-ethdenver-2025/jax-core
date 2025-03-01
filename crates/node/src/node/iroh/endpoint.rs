@@ -14,7 +14,6 @@ pub async fn create_ephemeral_endpoint() -> Endpoint {
         .expect("failed to build mainline discovery");
 
     // Create the endpoint with our key and discovery
-    
 
     Endpoint::builder()
         .discovery(Box::new(mainline_discovery))
@@ -41,7 +40,6 @@ pub async fn create_endpoint(socket_addr: SocketAddr, secret_key: SecretKey) -> 
         .expect("failed to build mainline discovery");
 
     // Create the endpoint with our key and discovery
-    
 
     Endpoint::builder()
         .secret_key(secret_key)
