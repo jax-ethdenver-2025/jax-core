@@ -1,6 +1,6 @@
 # jax-core
 
-the permissionlessly incentivized file storage layer for Ethereum
+[jax](https://jax.ac/): the permissionlessly incentivized file storage layer for Ethereum
 
 jax provides a decentralized storage network where anyone can participate as a storage provider and earn rewards. Built on Ethereum, it ensures your files remain accessible, censorship-resistant, and secure.
 
