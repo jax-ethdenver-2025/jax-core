@@ -8,8 +8,11 @@ contract AVSMock is IIncredibleSquaringTaskManager {
     mapping(uint32 => bytes32) public allTaskResponses;
 
     uint32 public immutable TASK_RESPONSE_WINDOW_BLOCK = 100;
-    
-    function createNewTask(bytes32 fileHash, uint32 quorumThresholdPercentage, bytes calldata quorumNumbers) external override {
+
+    function createNewTask(bytes32 fileHash, uint32 quorumThresholdPercentage, bytes calldata quorumNumbers)
+        external
+        override
+    {
         latestTaskNum++;
     }
 
@@ -31,10 +34,6 @@ contract AVSMock is IIncredibleSquaringTaskManager {
     }
 
     function getTaskResponse(uint32 taskIndex) external view override returns (TaskResponse memory) {
-        return TaskResponse({
-            referenceTaskIndex: taskIndex,
-            providers: new address[](0),
-            scores: new uint256[](0)
-        });
+        return TaskResponse({referenceTaskIndex: taskIndex, providers: new address[](0), scores: new uint256[](0)});
     }
 }

@@ -5,6 +5,7 @@ import {ERC20} from "solady/tokens/ERC20.sol";
 import {Ownable} from "solady/auth/Ownable.sol";
 import {Ed25519} from "./libraries/ED25519.sol";
 import {IIncredibleSquaringTaskManager} from "./interface/IIncredibleSquaringTaskManager.sol";
+
 struct Signature {
     bytes32 k;
     bytes32 r;
@@ -66,7 +67,7 @@ contract RewardPool is Ownable {
         peerList.push(nodeId);
         emit PeerAdded(nodeId);
     }
-    
+
     function deposit() external payable whenInitialized {
         require(msg.value > 0, "Invalid amount");
         emit Deposit(msg.value, hash);
@@ -94,7 +95,11 @@ contract RewardPool is Ownable {
         return Ed25519.verify(k, r, s, m);
     }
 
-    function getTaskResponse(uint32 taskIndex) public view returns (IIncredibleSquaringTaskManager.TaskResponse memory) {
+    function getTaskResponse(uint32 taskIndex)
+        public
+        view
+        returns (IIncredibleSquaringTaskManager.TaskResponse memory)
+    {
         return avs.getTaskResponse(taskIndex);
     }
 }

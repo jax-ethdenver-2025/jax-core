@@ -36,28 +36,23 @@ contract Factory {
 
     // TODO: paying the value forward into the pool
     //  does not seem to be working -- for now just gonna
-    //  not allow users to initialize the pool with value 
+    //  not allow users to initialize the pool with value
     //  through the frontend
-    function createPool(
-        bytes32 hash
-    ) external payable returns (address poolAddress) {
+    function createPool(bytes32 hash) external payable returns (address poolAddress) {
         // Check if hash is already used
         require(!usedHashes[hash], "Hash already used");
-        
+
         poolAddress = _create(hash, msg.value);
-        
+
         // Track the new pool and hash
         pools.push(poolAddress);
         isPool[poolAddress] = true;
         usedHashes[hash] = true;
-        
+
         emit PoolCreated(poolAddress, hash, msg.value);
     }
 
-    function _create(
-        bytes32 hash,
-        uint256 value
-    ) internal returns (address poolAddress) {
+    function _create(bytes32 hash, uint256 value) internal returns (address poolAddress) {
         bytes32 salt = hash;
 
         poolAddress = LibClone.cloneDeterministic(poolImplementation, salt);
